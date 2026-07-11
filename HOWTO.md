@@ -78,9 +78,9 @@ curl -fsSL https://raw.githubusercontent.com/FugginOld/topologygenerator/main/bo
 ### Manual (any Linux)
 
 ```bash
-# 1. dependencies (Debian/Ubuntu; adjust for your distro)
-sudo apt-get update
-sudo apt-get install -y git python3 pciutils util-linux dmidecode
+# 1. dependencies (Debian/Ubuntu; adjust for your distro). prefix with sudo if not root
+apt-get update
+apt-get install -y git python3 pciutils util-linux dmidecode
 
 # 2. get the repo
 git clone https://github.com/FugginOld/topologygenerator.git
@@ -127,11 +127,11 @@ to make it persistent.
 
 ```bash
 # edit User= and the two paths to match your machine
-sudo nano systemd/topology-agent.service
+nano systemd/topology-agent.service
 
-sudo cp systemd/topology-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now topology-agent
+cp systemd/topology-agent.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now topology-agent
 
 # watch it
 journalctl -u topology-agent -f
@@ -191,7 +191,7 @@ is missing, or the IP is wrong.
 `serve.py`. Stop it (Ctrl-C) and restart, then hard-reload the page (Ctrl-F5).
 
 **Linux map missing devices?** Install the collectors:
-`sudo apt-get install pciutils util-linux dmidecode`. Per-DIMM RAM detail needs
+`apt-get install pciutils util-linux dmidecode`. Per-DIMM RAM detail needs
 `dmidecode`, which reads DMI as root (the systemd service runs as your user —
 run it as root, or accept the `/proc/meminfo` total-only fallback).
 
