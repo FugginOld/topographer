@@ -33,6 +33,20 @@ STORE = os.path.join(ROOT, "out", "topologies")
 INGEST_TOKEN = os.environ.get("TOPO_TOKEN", "")   # optional shared secret for /api/ingest
 
 
+def store_path(tid: str) -> str:
+    """Resolve <tid>.json inside STORE, refusing any id that escapes it.
+
+    The single barrier for every user-supplied id: strip directory parts,
+    then confirm the resolved file really sits directly in STORE (blocks
+    '..', absolute paths, and symlink tricks). Raises ValueError otherwise.
+    """
+    name = os.path.basename(tid)
+    fp = os.path.realpath(os.path.join(STORE, name + ".json"))
+    if os.path.dirname(fp) != os.path.realpath(STORE):
+        raise ValueError("bad topology id")
+    return fp
+
+
 def slug(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "topology"
     return f"{s}-{int(time.time())}"  # timestamp keeps ids unique
@@ -50,7 +64,7 @@ def save_ingest(topo: dict, remote: str) -> dict:
     topo["name"] = name
     topo["source"] = remote
     os.makedirs(STORE, exist_ok=True)
-    with open(os.path.join(STORE, tid + ".json"), "w", encoding="utf-8") as fh:
+    with open(store_path(tid), "w", encoding="utf-8") as fh:
         json.dump(topo, fh, indent=2)
     return {"id": tid, "name": name}
 
@@ -89,7 +103,7 @@ def generate(name: str) -> dict:
     """Read this host's hardware fabric and save it as a new topology."""
     tid = slug(name)
     os.makedirs(STORE, exist_ok=True)
-    out = os.path.join(STORE, tid + ".json")
+    out = store_path(tid)
     r = subprocess.run(
         [sys.executable, GENERATOR, "--out", out, "--name", name],
         cwd=ROOT, capture_output=True, text=True,
@@ -118,11 +132,10 @@ def telemetry_local() -> dict:
 
 def _is_remote(tid: str) -> bool:
     """A topology carrying a 'source' field was pushed by a remote agent."""
-    fp = os.path.join(STORE, tid + ".json")
     try:
-        with open(fp, encoding="utf-8") as fh:
+        with open(store_path(tid), encoding="utf-8") as fh:
             return "source" in json.load(fh)
-    except OSError:
+    except (OSError, ValueError):
         return False
 
 
@@ -165,7 +178,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send(200, {**_tele.ZERO, "error": str(e)})
         if self.path.startswith("/t/"):
             tid = os.path.basename(self.path.split("?")[0])[:-5]  # strip .json
-            fp = os.path.join(STORE, tid + ".json")
+            try:
+                fp = store_path(tid)
+            except ValueError:
+                return self._send(404, {"error": "not found"})
             if not os.path.isfile(fp):
                 return self._send(404, {"error": "not found"})
             with open(fp, encoding="utf-8") as fh:
@@ -178,8 +194,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 name = (self._body().get("name") or "topology").strip()
                 return self._send(200, generate(name))
             if self.path == "/api/delete":
-                tid = os.path.basename(self._body().get("id", ""))
-                fp = os.path.join(STORE, tid + ".json")
+                try:
+                    fp = store_path(self._body().get("id", ""))
+                except ValueError:
+                    return self._send(200, {"ok": True})  # nothing to delete
                 if os.path.isfile(fp):
                     os.remove(fp)
                 return self._send(200, {"ok": True})
