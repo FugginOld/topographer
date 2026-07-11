@@ -32,6 +32,20 @@ if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContin
 # --- optional shared secret passed to serve.py via the environment ---
 if ($Token) { $env:TOPO_TOKEN = $Token; Write-Host "ingest token: enabled" }
 
+# --- free the port: an old serve.py still holding it would keep serving stale code ---
+$conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($conn) {
+  $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+  if ($proc -and $proc.ProcessName -in @('python', 'py', 'pythonw')) {
+    Write-Host "stopping old server (pid $($proc.Id)) holding port $Port"
+    Stop-Process -Id $proc.Id -Force
+    Start-Sleep -Milliseconds 600
+  } elseif ($proc) {
+    Write-Error "port $Port is in use by '$($proc.ProcessName)' (pid $($proc.Id)). Stop it, or run with -Port <other>."
+    exit 1
+  }
+}
+
 # --- locate Python 3 ---
 $py = Get-Command python -ErrorAction SilentlyContinue
 if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
