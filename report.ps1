@@ -21,9 +21,10 @@ git pull --ff-only 2>$null
 
 $py = Get-Command python -ErrorAction SilentlyContinue
 if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
-if (-not $py) { Write-Error "Python 3 not found on PATH — install it and re-run."; exit 1 }
+if (-not $py) { Write-Error "Python 3 not found on PATH - install it and re-run."; exit 1 }
 
 $argv = @("agent.py", "--server", $Server, "--report")
-if ($Name) { $argv += @("--name", $Name) }
-Write-Host "reporting to $Server$(if ($Name) { " as '$Name'" })  (Ctrl-C to stop)"
+$suffix = ""
+if ($Name) { $argv += @("--name", $Name); $suffix = " as '$Name'" }
+Write-Host "reporting to $Server$suffix  (Ctrl-C to stop)"
 & $py.Source @argv
