@@ -68,7 +68,10 @@ unifi_snmp:
 # If off, right-click still opens an existing report or shows the agent command.
 remote_scan:
   enabled: false
-  user: joe
+  user: joe                         # default SSH user
+  hosts:                            # optional per-host overrides (IP: user)
+    192.168.1.154: pi
+    192.168.1.33: fuggin
   ssh_opts: "-o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
   python: python3
 

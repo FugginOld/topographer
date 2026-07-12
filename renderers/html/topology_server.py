@@ -155,13 +155,18 @@ def scan_host(host: str, name: str) -> dict:
     except ValueError:
         raise RuntimeError("invalid host — must be an IP address")
     cfg = _remote_scan_cfg()
-    agent_hint = (f"remote SSH scan is off. On {host}, run:\n"
-                  f"  ./report.sh http://{server_ip()}:8770 {name}")
+    # bootstrap clones/updates the repo, installs deps, and starts reporting
+    # (name defaults to the host's own hostname) — works on a fresh machine.
+    agent_hint = ("SSH scan is off. To add this machine, run this on it once:\n"
+                  "  curl -fsSL https://raw.githubusercontent.com/FugginOld/"
+                  f"topologygenerator/main/bootstrap.sh | TOPO_SERVER=http://{server_ip()}:8770 bash")
     if not cfg.get("enabled"):
         raise RuntimeError(agent_hint)
-    user = cfg.get("user")
+    # per-host user override, else the default user
+    user = (cfg.get("hosts") or {}).get(host) or cfg.get("user")
     if not user:
-        raise RuntimeError("remote_scan.user not set in config.yaml")
+        raise RuntimeError(f"no SSH user for {host} — set remote_scan.user "
+                           f"or remote_scan.hosts['{host}'] in config.yaml")
     opts = str(cfg.get("ssh_opts", "-o ConnectTimeout=8 -o BatchMode=yes")).split()
     py = cfg.get("python", "python3")
     script = os.path.join(ROOT, "make_linux_topology.py")
