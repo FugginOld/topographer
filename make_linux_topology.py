@@ -30,6 +30,7 @@ import argparse
 import glob
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -245,6 +246,103 @@ def displays() -> list[str]:
     return out
 
 
+# ── universal sources (work on any Linux — the payoff is on boards with no PCIe
+#    or DMI, e.g. a Raspberry Pi, where the fabric/dmidecode paths find nothing) ──
+
+def _parse_board(cpuinfo: str, dt_model: str, arch: str) -> dict:
+    """Board/SoC identity from /proc/cpuinfo + device-tree. x86 fills 'model';
+    ARM boards (Pi) fill 'board' (device-tree) + 'soc'/'revision'/'serial'."""
+    info: dict = {}
+    for line in cpuinfo.splitlines():
+        if ":" not in line:
+            continue
+        k, v = (x.strip() for x in line.split(":", 1))
+        kl = k.lower()
+        if kl == "model name" and "model" not in info:
+            info["model"] = clean(v)
+        elif kl == "hardware":
+            info["soc"] = v
+        elif kl == "revision" and v:
+            info["revision"] = v
+        elif kl == "serial" and v.strip("0 "):
+            info["serial"] = v
+    if dt_model:
+        info["board"] = dt_model
+    if arch:
+        info["arch"] = arch
+    return info
+
+
+def board_info() -> dict:
+    dt = read("/proc/device-tree/model").replace("\x00", "").strip()
+    return _parse_board(read("/proc/cpuinfo"), dt, platform.machine())
+
+
+def _pick_temp(zones: list[tuple[str, str]]) -> float | None:
+    """First CPU/SoC thermal zone (°C), else the first readable zone."""
+    best = None
+    for typ, milli in zones:
+        if not milli.lstrip("-").isdigit():
+            continue
+        c = int(milli) / 1000.0
+        if any(k in typ.lower() for k in ("cpu", "soc", "x86_pkg")):
+            return c
+        if best is None:
+            best = c
+    return best
+
+
+def cpu_temp() -> float | None:
+    zones = [(read(z + "/type"), read(z + "/temp"))
+             for z in sorted(glob.glob("/sys/class/thermal/thermal_zone*"))]
+    return _pick_temp(zones)
+
+
+def net_ifaces() -> list[dict]:
+    """Every physical network interface (not just PCI-backed ones). This is what
+    surfaces a Pi's USB ethernet + SDIO wifi, which the PCI path never sees."""
+    base = "/sys/class/net"
+    out = []
+    for iface in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        p = f"{base}/{iface}"
+        if iface == "lo" or read(p + "/type") == "772":        # skip loopback
+            continue
+        has_dev = os.path.exists(p + "/device")
+        real = os.path.realpath(p + "/device") if has_dev else ""
+        bdf = re.search(r"([0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f])", real)
+        spd = read(p + "/speed")
+        drv = os.path.realpath(p + "/device/driver") if has_dev else ""
+        out.append({
+            "iface": iface,
+            "mac": read(p + "/address"),
+            "up": read(p + "/carrier") == "1" or read(p + "/operstate") == "up",
+            "speed": int(spd) if spd.lstrip("-").isdigit() else 0,
+            "mtu": read(p + "/mtu"),
+            "driver": os.path.basename(drv) if drv else "",
+            "wireless": os.path.exists(p + "/wireless") or os.path.exists(p + "/phy80211"),
+            "bdf": bdf.group(1) if bdf else None,
+            "virtual": not has_dev,        # docker0/veth/bridges have no device link
+        })
+    return out
+
+
+def usb_devices() -> list[dict]:
+    """Named USB devices (skips hubs + interface nodes) from sysfs."""
+    base = "/sys/bus/usb/devices"
+    out = []
+    for d in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        p = f"{base}/{d}"
+        idv, idp = read(p + "/idVendor"), read(p + "/idProduct")
+        if not idv or read(p + "/bDeviceClass") == "09":       # no vid, or a hub
+            continue
+        product, manuf = read(p + "/product"), read(p + "/manufacturer")
+        if not (product or manuf):                             # unnamed root hubs
+            continue
+        out.append({"product": product or f"{idv}:{idp}", "manuf": manuf,
+                    "vid_pid": f"{idv}:{idp}", "speed": read(p + "/speed")})
+    return out
+
+
 def build() -> list[dict]:
     names = lspci_names()
     nets = net_links()
@@ -261,11 +359,20 @@ def build() -> list[dict]:
         return idmap[key]
 
     cpu_name, cores = cpu_info()
+    binfo = board_info()
+    # x86 has a cpuinfo "model name"; an ARM board (Pi) gets its device-tree name
+    label = cpu_name if cpu_name != "CPU" else (binfo.get("board") or binfo.get("model") or "CPU")
+    temp = cpu_temp()
+    root_meta = {k: v for k, v in binfo.items()}
+    root_meta["cores"] = str(cores)
+    if temp is not None:
+        root_meta["temp"] = f"{temp:.0f}°C"
+    sub = f"{cores} cores" + (f" · {binfo['arch']}" if binfo.get("arch") else "") \
+        + (f" · {temp:.0f}°C" if temp is not None else "")
     root_bdf = next((b for b in bdfs if b.endswith(":00:00.0")), None)
     root_key = root_bdf or "__root__"
-    nodes = {root_key: {"id": nid(root_key), "label": cpu_name, "kind": "cpu",
-                        "cls": "gen5", "parent": None,
-                        "sub": f"{cores} cores · root complex"}}
+    nodes = {root_key: {"id": nid(root_key), "label": label, "kind": "cpu",
+                        "cls": "gen5", "parent": None, "sub": sub, "meta": root_meta}}
 
     for bdf in bdfs:
         if bdf == root_bdf:
@@ -352,6 +459,40 @@ def build() -> list[dict]:
         add({"label": conn, "sub": "display", "cls": "gen4", "parent": gpu_id,
              "kind": "leaf", "cap": 6, "grp": "display", "link": "video"})
 
+    # network interfaces the PCI path missed (Pi USB-ethernet + SDIO wifi, etc.)
+    for nif in net_ifaces():
+        if nif["virtual"] or (nif["bdf"] and nif["bdf"] in kept):
+            continue
+        spd = nif["speed"]
+        parts = []
+        if spd > 0:
+            parts.append(f"{spd / 1000:g}GbE" if spd >= 1000 else f"{spd}Mb")
+        parts.append("link up" if nif["up"] else "no link")
+        meta = {"interface": nif["iface"]}
+        for k in ("mac", "driver", "mtu"):
+            if nif[k]:
+                meta[k] = nif[k]
+        add({"label": nif["iface"] + (" · wifi" if nif["wireless"] else ""),
+             "sub": " · ".join(parts), "cls": "gen4", "parent": root_id, "kind": "leaf",
+             "grp": "net", "cap": (spd / 1000 if spd > 0 else 1), "up": nif["up"],
+             "iface": nif["iface"], "link": ("wifi" if nif["wireless"] else "eth"), "meta": meta})
+
+    # USB devices under a USB hub node
+    usbs = usb_devices()
+    if usbs:
+        hub = add({"label": "USB", "sub": f"{len(usbs)} device{'s' if len(usbs) != 1 else ''}",
+                   "cls": "gen3", "parent": root_id, "kind": "hub", "cap": 0})
+        for u in usbs:
+            spd = u["speed"]
+            umeta = {"vid:pid": u["vid_pid"]}
+            if u["manuf"]:
+                umeta["vendor"] = u["manuf"]
+            if spd:
+                umeta["speed"] = f"{spd} Mb/s"
+            add({"label": clean(u["product"]), "parent": hub, "kind": "leaf", "grp": "usb",
+                 "cls": "gen3", "sub": (u["manuf"] or "USB") + (f" · {spd}Mb" if spd else ""),
+                 "meta": umeta})
+
     return out
 
 
@@ -378,6 +519,18 @@ def _selftest() -> None:
     g["read"] = lambda p: sysfs.get(p.rsplit("/", 1)[-1], "")
     mm = pci_meta("0000:00:02.0", {"bus type": "NVMe"})
     assert mm["device id"] == "0x9a09" and mm["class"] == "display" and mm["bus type"] == "NVMe"
+    # board identity: a Raspberry Pi cpuinfo has no "model name" — device-tree names it
+    pi_cpuinfo = ("processor\t: 0\nHardware\t: BCM2835\n"
+                  "Revision\t: a02082\nSerial\t\t: 00000000abcd1234\n")
+    b = _parse_board(pi_cpuinfo, "Raspberry Pi 3 Model B Rev 1.2", "aarch64")
+    assert b["board"] == "Raspberry Pi 3 Model B Rev 1.2" and b["soc"] == "BCM2835", b
+    assert b["serial"] == "00000000abcd1234" and b["arch"] == "aarch64" and "model" not in b, b
+    x86 = _parse_board("model name\t: Intel Core i7\n", "", "x86_64")
+    assert x86["model"] == "Intel Core i7", x86
+    # thermal picks a cpu/soc zone over a generic one
+    assert _pick_temp([("acpitz", "40000"), ("x86_pkg_temp", "55000")]) == 55.0
+    assert _pick_temp([("iwlwifi", "48000")]) == 48.0
+    assert _pick_temp([("t", "bogus")]) is None
     print("selftest OK")
 
 
