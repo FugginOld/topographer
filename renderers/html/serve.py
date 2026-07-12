@@ -41,6 +41,10 @@ def store_path(tid: str) -> str:
     '..', absolute paths, and symlink tricks). Raises ValueError otherwise.
     """
     name = os.path.basename(tid)
+    # allowlist: an id is only ever a slug/hostname — reject anything else up
+    # front, so no separators or traversal sequences can reach the filesystem.
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        raise ValueError("bad topology id")
     fp = os.path.realpath(os.path.join(STORE, name + ".json"))
     if os.path.dirname(fp) != os.path.realpath(STORE):
         raise ValueError("bad topology id")

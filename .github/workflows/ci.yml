@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# CI only reads the repo; deny everything else on the GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   python:
     name: python ${{ matrix.python }}
