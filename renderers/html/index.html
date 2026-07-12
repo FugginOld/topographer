@@ -356,7 +356,7 @@ async function pollTele(){
     const q='api/telemetry?host='+encodeURIComponent(activeId||'')+'&_='+Date.now();
     const r=await fetch(q);
     if(r.ok){ TELE=await r.json(); if(TELE.error)console.warn('telemetry error:',TELE.error); }
-    else console.warn('telemetry HTTP '+r.status+' — restart serve.py (stale server has no /api/telemetry route)');
+    else console.warn('telemetry HTTP '+r.status+' — restart topology_server.py (stale server has no /api/telemetry route)');
   }catch(e){ console.warn('telemetry fetch failed:',e.message); }
 }
 const norm=s=>String(s).toLowerCase().replace(/\[r\]|\(r\)|\[tm\]|\(tm\)/g,'').replace(/[^a-z0-9]+/g,' ').trim();

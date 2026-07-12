@@ -21,11 +21,11 @@ Map the real hardware of every machine on your network and watch them live:
 
 ```
    Windows PC ─┐  ./report.sh  (or report.ps1)
-   Linux box  ─┼──►  serve.py on one host  ──►  live dashboard, one card per machine
+   Linux box  ─┼──►  topology_server.py on one host  ──►  live dashboard, one card per machine
    Proxmox    ─┘     (POST /api/ingest + telemetry)
 ```
 
-- One **server** runs `python renderers/html/serve.py`; open `http://HOST:8770`.
+- One **server** runs `python renderers/html/topology_server.py`; open `http://HOST:8770`.
 - Each machine runs an **agent** that scans its own hardware and pushes its
   topology and live telemetry (`report.sh` on Linux, `report.ps1` on Windows, or
   the `bootstrap.sh` one-liner for a fresh Debian box).
@@ -53,7 +53,7 @@ model — so you can add outputs without touching collection.
 pip install -r requirements.txt
 cp config.example.yaml config.yaml     # edit — this file is gitignored
 python make_network_topology.py --config config.yaml
-python renderers/html/serve.py         # http://localhost:8770
+python renderers/html/topology_server.py         # http://localhost:8770
 ```
 
 With nothing configured but `arpscan` (the default), you already get a live host
@@ -99,7 +99,7 @@ commit the tooling and `config.example.yaml` (dummy values). One accidental
 ```
 collectors/   read-only network source adapters (one file per source)
 core/         schema.py · normalize.py · enrich.py · oui.csv
-renderers/    html/ (dashboard + serve.py) · static_svg.py · mermaid.py
+renderers/    html/ (dashboard + topology_server.py) · static_svg.py · mermaid.py
 systemd/      timer/service units + topology-agent.service
 tests/        fixtures + end-to-end pipeline test
 make_network_topology.py   network topology orchestrator
@@ -110,7 +110,7 @@ make_linux_topology.py  Linux hardware scan (sysfs/proc)
 telemetry.py            shared live CPU/net/disk/temp sampler
 agent.py                push topology + telemetry to the server
 report.sh · report.ps1  run the agent (self-updating)
-server.ps1              start the dashboard (firewall + serve.py)
+server.ps1              start the dashboard (firewall + topology_server.py)
 bootstrap.sh            fresh-Debian one-liner
 ```
 

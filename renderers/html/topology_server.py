@@ -9,7 +9,7 @@ This serves renderers/html/ plus a tiny API over out/topologies/*.json:
     POST /api/generate {name} -> run the hardware scanner, save as a new topology
     POST /api/delete   {id}   -> remove a saved topology
 
-    python renderers/html/serve.py [--port 8770]
+    python renderers/html/topology_server.py [--port 8770]
 
 GENERATE runs make_pc_topology.py to map this PC's hardware fabric.
 """

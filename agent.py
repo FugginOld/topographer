@@ -30,7 +30,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import telemetry as _tele   # noqa: E402  same sampler serve.py uses
+import telemetry as _tele   # noqa: E402  same sampler topology_server.py uses
 
 GENERATOR = "make_pc_topology.py" if sys.platform.startswith("win") else "make_linux_topology.py"
 
@@ -72,11 +72,11 @@ def report(server: str, name: str, token: str, interval: float, topo_every: floa
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:200]
         if e.code == 404:
-            sys.exit(f"server returned 404 for /api/ingest — {server} is running an OLD serve.py.\n"
-                     f"On the server: stop it, `git pull`, and restart (.\\server.ps1 or python renderers/html/serve.py).")
+            sys.exit(f"server returned 404 for /api/ingest — {server} is running an OLD topology_server.py.\n"
+                     f"On the server: stop it, `git pull`, and restart (.\\server.ps1 or python renderers/html/topology_server.py).")
         sys.exit(f"server rejected the push: HTTP {e.code} {detail}")
     except (urllib.error.URLError, OSError) as e:
-        sys.exit(f"could not reach {server}: {e}  (is serve.py running? firewall open on 8770?)")
+        sys.exit(f"could not reach {server}: {e}  (is topology_server.py running? firewall open on 8770?)")
     print(f"reporting '{name}' (id={tid}) to {server} every {interval}s; Ctrl-C to stop")
     last_topo = time.monotonic()
     while True:

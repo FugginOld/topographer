@@ -3,14 +3,14 @@
 Map the real hardware of every machine on your network and watch them live from
 one dashboard.
 
-- **One dashboard server** (your Windows box, `192.168.1.225`) runs `serve.py`,
+- **One dashboard server** (your Windows box, `192.168.1.225`) runs `topology_server.py`,
   stores every machine's topology, and shows the live HUD.
 - **Each reporting machine** runs a small **agent** that scans its own hardware
   and pushes its topology + live telemetry to the server.
 
 ```
    Windows PC ─┐
-   Linux box  ─┼──►  http://192.168.1.225:8770   (serve.py on the Windows server)
+   Linux box  ─┼──►  http://192.168.1.225:8770   (topology_server.py on the Windows server)
    Debian srv ─┘      dashboard lists every host, live HUD per host
 ```
 
@@ -50,7 +50,7 @@ Do this **once**, on the machine that will host the dashboard.
 
    ```powershell
    New-NetFirewallRule -DisplayName "Topology dashboard" -Direction Inbound -LocalPort 8770 -Protocol TCP -Action Allow
-   python renderers\html\serve.py
+   python renderers\html\topology_server.py
    ```
 
 4. **Open the dashboard:** http://localhost:8770
@@ -175,10 +175,10 @@ Register-ScheduledTask -TaskName "TopologyAgent" -Action $action -Trigger $trigg
 By default any machine that can reach the server may push. To require a shared
 secret:
 
-**On the server**, set the token before starting `serve.py`:
+**On the server**, set the token before starting `topology_server.py`:
 ```powershell
 $env:TOPO_TOKEN = "pick-a-long-secret"
-python renderers\html\serve.py
+python renderers\html\topology_server.py
 ```
 
 **On each reporting machine**, provide the same token:
@@ -208,7 +208,7 @@ If it hangs/refuses: the server isn't running, or the firewall rule (Part A.3)
 is missing, or the IP is wrong.
 
 **HUD stuck at zeros on the server itself?** You're likely viewing an old
-`serve.py`. Stop it (Ctrl-C) and restart, then hard-reload the page (Ctrl-F5).
+`topology_server.py`. Stop it (Ctrl-C) and restart, then hard-reload the page (Ctrl-F5).
 
 **Linux map missing devices?** Install the collectors:
 `apt-get install pciutils util-linux dmidecode`. Per-DIMM RAM detail needs
@@ -232,14 +232,14 @@ Add `--report` (what `report.sh`/`report.ps1` do) to also stream live telemetry.
 
 | Machine | Runs | Command |
 |---|---|---|
-| **Server** (192.168.1.225) | dashboard + store | `python renderers\html\serve.py` |
+| **Server** (192.168.1.225) | dashboard + store | `python renderers\html\topology_server.py` |
 | **Reporting (Linux)** | agent (push) | `./report.sh` |
 | **Reporting (Windows)** | agent (push) | `.\report.ps1` |
 
 | File | Purpose |
 |---|---|
-| `server.ps1` | start the dashboard (firewall + serve.py) on Windows |
-| `renderers/html/serve.py` | dashboard server + ingest/telemetry API |
+| `server.ps1` | start the dashboard (firewall + topology_server.py) on Windows |
+| `renderers/html/topology_server.py` | dashboard server + ingest/telemetry API |
 | `renderers/html/index.html` | the dashboard UI |
 | `make_pc_topology.py` | Windows hardware scan |
 | `make_linux_topology.py` | Linux hardware scan |

@@ -6,5 +6,5 @@
     systemctl list-timers topology.timer
 
 Edit `User=`, `WorkingDirectory=`, and the config path first. Run the dashboard
-server (`renderers/html/serve.py`) separately, or point a persistent web server
+server (`renderers/html/topology_server.py`) separately, or point a persistent web server
 at `out/topology.json`.

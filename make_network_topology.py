@@ -103,7 +103,7 @@ def main() -> None:
     )
     log.info("wrote %s (%d nodes, %d links, %d zones)",
              json_path, len(topo.nodes), len(topo.links), len(topo.zones))
-    print(f"\n  topology.json ready -> serve it:  python renderers/html/serve.py")
+    print(f"\n  topology.json ready -> serve it:  python renderers/html/topology_server.py")
 
 
 def _dedupe_zones(zones: list[dict]) -> list[dict]:
