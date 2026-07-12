@@ -148,9 +148,10 @@ def scan_host(host: str, name: str) -> dict:
     """SSH into a Linux host, run the hardware scanner over the pipe, ingest the
     result as a machine card. Raises with the agent fallback if SSH isn't set up."""
     # host must be a literal IP — blocks ssh option injection (e.g. a leading
-    # '-' becoming -oProxyCommand=...). Network nodes always carry an IP.
+    # '-' becoming -oProxyCommand=...). Rebind to the parsed IP's canonical text
+    # so only a validated address (never the raw input) reaches the command.
     try:
-        ipaddress.ip_address(host)
+        host = str(ipaddress.ip_address(host))
     except ValueError:
         raise RuntimeError("invalid host — must be an IP address")
     cfg = _remote_scan_cfg()
