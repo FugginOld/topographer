@@ -68,10 +68,10 @@ unifi_snmp:
 # If off, right-click still opens an existing report or shows the agent command.
 remote_scan:
   enabled: false
-  user: joe                         # default SSH user
+  user: admin                       # default SSH user
   hosts:                            # optional per-host overrides (IP: user)
-    192.168.1.154: pi
-    192.168.1.33: fuggin
+    10.0.30.10: pi
+    10.0.30.11: root
   ssh_opts: "-o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
   python: python3
 
@@ -83,8 +83,8 @@ docker:
   enabled: false
   ssh_opts: "-o ConnectTimeout=8 -o BatchMode=yes"
   hosts:
-    - {ssh: joe@10.0.30.10, name: fugginnas}
-    - {ssh: joe@10.0.30.11, name: ollama-01}
+    - {ssh: admin@10.0.30.10, name: nas01}
+    - {ssh: admin@10.0.30.11, name: app01}
 
 dns:
   enabled: false
