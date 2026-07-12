@@ -22,6 +22,7 @@ from renderers import mermaid, static_svg
 from collectors.arpscan import ArpScanCollector
 from collectors.pingsweep import PingSweepCollector
 from collectors.opnsense import OPNsenseCollector
+from collectors.unifi import UnifiCollector
 from collectors.unifi_snmp import UnifiSnmpCollector
 from collectors.tailscale import TailscaleCollector
 from collectors.docker import DockerCollector
@@ -29,6 +30,7 @@ from collectors.dns import DnsCollector
 
 COLLECTORS = {
     "opnsense": OPNsenseCollector,     # zones + names first
+    "unifi": UnifiCollector,           # UniFi gateway: VLANs + client/uplink map
     "arpscan": ArpScanCollector,
     "pingsweep": PingSweepCollector,   # no-deps discovery (Windows-friendly)
     "unifi_snmp": UnifiSnmpCollector,

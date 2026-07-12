@@ -47,6 +47,20 @@ pingsweep:
   workers: 64
   resolve: true
 
+# unifi: pull VLANs + client/uplink topology from a UniFi gateway (UCG/UDM/UXG).
+# This is the best source for a UniFi network — knows the real VLAN layout.
+unifi:
+  enabled: false
+  url: https://192.168.1.1          # the gateway itself
+  site: default
+  verify_tls: false                 # gateways ship a self-signed cert
+  api_key: "CHANGEME"               # Settings > Control Plane > Integrations > Create API Key
+  # username: topology              # OR a local admin account instead of an API key
+  # password: "CHANGEME"
+  zone_map:
+    IoT:     {cls: iot,   policy: "no lateral"}
+    Guest:   {cls: guest, policy: "isolated"}
+
 unifi_snmp:
   enabled: false
   switches:
