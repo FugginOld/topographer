@@ -96,15 +96,19 @@ def entry(path: str) -> dict:
     """One sidebar list row from a saved file (cheap read, tolerates junk)."""
     with open(path, encoding="utf-8") as fh:
         d = json.load(fh)
+    fid = os.path.splitext(os.path.basename(path))[0]
+    # the network map is saved as id "network"; also honour the kind tag so
+    # pre-tag files still categorize correctly without a re-scan
+    is_network = d.get("kind") == "network" or fid == "network"
     return {
-        "id": os.path.splitext(os.path.basename(path))[0],
-        "name": d.get("name") or os.path.splitext(os.path.basename(path))[0],
+        "id": fid,
+        "name": d.get("name") or fid,
         "generated": d.get("generated", ""),
         "modules": len(d.get("nodes", [])),
-        "kind": d.get("kind", "host"),   # "network" map vs a machine's hardware
+        "kind": "network" if is_network else "host",
         # reported hosts carry their push origin; a local machine card has none,
         # so fall back to this server's own IP. The network map gets no IP.
-        "ip": d.get("source") or ("" if d.get("kind") == "network" else server_ip()),
+        "ip": "" if is_network else (d.get("source") or server_ip()),
     }
 
 
