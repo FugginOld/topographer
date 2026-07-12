@@ -165,9 +165,10 @@ def scan_host(host: str, name: str) -> dict:
     opts = str(cfg.get("ssh_opts", "-o ConnectTimeout=8 -o BatchMode=yes")).split()
     py = cfg.get("python", "python3")
     script = os.path.join(ROOT, "make_linux_topology.py")
-    # ssh joins the remote args and runs them through the host's shell, so the
-    # remote command is built shell-quoted; user/py/opts come from trusted config.
-    remote = f"{shlex.quote(str(py))} - --stdout --name {shlex.quote(name)}"
+    # Only the validated IP and trusted-config values (user/py/opts) reach the
+    # command. The user-supplied name is NOT passed to the remote shell — we
+    # stamp it onto the result server-side after the scan returns.
+    remote = f"{shlex.quote(str(py))} - --stdout"
     cmd = ["ssh", *opts, f"{user}@{host}", remote]
     try:
         with open(script, encoding="utf-8") as fh:
@@ -180,6 +181,7 @@ def scan_host(host: str, name: str) -> dict:
         topo = json.loads(r.stdout)
     except ValueError:
         raise RuntimeError("remote scan returned no JSON (is python3 on the host?)\n\n" + agent_hint)
+    topo["name"] = name              # our label, applied here — never in the ssh command
     return save_ingest(topo, host)   # source=host -> card shows its IP
 
 
