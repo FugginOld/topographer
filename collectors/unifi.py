@@ -27,17 +27,25 @@ failure — a down controller yields no map, never a crash.
 """
 from __future__ import annotations
 
+import json
 import logging
+import ssl
+import urllib.error
+import urllib.request
+from http.cookiejar import CookieJar
 
 from .base import Collector
 from core.schema import norm_mac, now_iso
 
-try:
-    import requests
-except ImportError:  # requests is in requirements.txt
-    requests = None
-
 log = logging.getLogger("collector.unifi")
+
+
+def _ssl_ctx(verify: bool):
+    ctx = ssl.create_default_context()
+    if not verify:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 # UniFi device .type -> our node kind
 _DEV_KIND = {"ugw": "firewall", "udm": "firewall", "uxg": "firewall",
@@ -143,43 +151,51 @@ class UnifiCollector(Collector):
 
     def __init__(self, cfg: dict):
         super().__init__(cfg)
-        self._sess = None
+        self._opener = None
         self._nets = self._clients = self._devices = None
 
-    # ---- HTTP ----------------------------------------------------------------
-    def _session(self):
-        if self._sess is not None:
-            return self._sess
-        s = requests.Session()
-        s.verify = self.cfg.get("verify_tls", False)
+    # ---- HTTP (stdlib only, no requests dependency) --------------------------
+    def _api_key(self):
         key = self.cfg.get("api_key")
-        if key:
-            s.headers["X-API-KEY"] = key
-        else:
+        return key if key and key != "CHANGEME" else None
+
+    def _build_opener(self):
+        """Cookie-aware opener; logs in with username/password if no API key."""
+        if self._opener is not None:
+            return self._opener
+        ctx = _ssl_ctx(self.cfg.get("verify_tls", False))
+        op = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=ctx),
+            urllib.request.HTTPCookieProcessor(CookieJar()),
+        )
+        if not self._api_key():                       # password auth -> get a cookie
             url = self.cfg["url"].rstrip("/")
-            r = s.post(f"{url}/api/auth/login", timeout=15, json={
-                "username": self.cfg.get("username"),
-                "password": self.cfg.get("password"),
-            })
-            if r.status_code != 200:
-                log.warning("unifi login failed (%s) — check url/credentials", r.status_code)
+            body = json.dumps({"username": self.cfg.get("username"),
+                               "password": self.cfg.get("password")}).encode()
+            req = urllib.request.Request(f"{url}/api/auth/login", data=body,
+                                         headers={"Content-Type": "application/json"},
+                                         method="POST")
+            try:
+                op.open(req, timeout=15)
+            except urllib.error.URLError as e:
+                log.warning("unifi login failed — check url/credentials: %s", e)
                 return None
-        self._sess = s
-        return s
+        self._opener = op
+        return op
 
     def _get(self, path: str):
-        s = self._session()
-        if s is None:
+        op = self._build_opener()
+        if op is None:
             return []
         url = self.cfg["url"].rstrip("/")
         site = self.cfg.get("site", "default")
+        req = urllib.request.Request(f"{url}/proxy/network/api/s/{site}/{path}")
+        if self._api_key():
+            req.add_header("X-API-KEY", self._api_key())
         try:
-            r = s.get(f"{url}/proxy/network/api/s/{site}/{path}", timeout=20)
-            if r.status_code != 200:
-                log.warning("unifi GET %s -> %s", path, r.status_code)
-                return []
-            return r.json().get("data", [])
-        except (requests.RequestException, ValueError) as e:
+            with op.open(req, timeout=20) as r:
+                return json.load(r).get("data", [])
+        except (urllib.error.URLError, ValueError) as e:
             log.warning("unifi GET %s failed: %s", path, e)
             return []
 
@@ -192,15 +208,10 @@ class UnifiCollector(Collector):
 
     # ---- Collector API -------------------------------------------------------
     def zones(self) -> list[dict]:
-        if requests is None:
-            return []
         self._fetch()
         return networks_to_zones(self._nets, self.cfg.get("zone_map", {}))
 
     def collect(self) -> list[dict]:
-        if requests is None:
-            log.warning("requests not installed; skipping unifi")
-            return []
         self._fetch()
         ts = now_iso()
         items = clients_to_nodes(self._clients, ts)
