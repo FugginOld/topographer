@@ -12,10 +12,17 @@ REPO="${TOPO_REPO:-https://github.com/FugginOld/topologygenerator.git}"
 DIR="${TOPO_DIR:-$HOME/topologygenerator}"
 SERVER="${TOPO_SERVER:-http://192.168.1.225:8770}"
 
+# Privilege: already root -> no sudo needed; otherwise use sudo if present.
+# CAN_ROOT is true when we can write system files (install pkgs + the unit).
+RUN_USER="$(id -un)"
+SUDO=""
+if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then SUDO="sudo"; fi
+if [ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ]; then CAN_ROOT=true; else CAN_ROOT=false; fi
+
 if command -v apt-get >/dev/null 2>&1; then
-  apt-get update -qq \
-    && apt-get install -y -qq git python3 pciutils util-linux dmidecode \
-    || echo "warn: dependency install failed — run as root, or install: git python3 pciutils util-linux dmidecode"
+  $SUDO apt-get update -qq \
+    && $SUDO apt-get install -y -qq git python3 pciutils util-linux dmidecode \
+    || echo "warn: dependency install failed — install manually: git python3 pciutils util-linux dmidecode"
 else
   # ponytail: no apt-get (e.g. Unraid/Slackware) — check what's actually present instead of a blanket warning
   missing=""
@@ -36,13 +43,7 @@ chmod +x "$DIR/report.sh"
 # Install as a systemd service so reporting runs in the background (survives
 # logout + reboot) instead of occupying this terminal. Falls back to foreground
 # where systemd/root isn't available.
-RUN_USER="$(id -un)"
-SUDO=""
-if [ "$(id -u)" -ne 0 ]; then
-  if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; fi
-fi
-
-if command -v systemctl >/dev/null 2>&1 && { [ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ]; }; then
+if command -v systemctl >/dev/null 2>&1 && [ "$CAN_ROOT" = true ]; then
   echo "installing systemd service 'topology-agent' (may prompt for sudo)…"
   $SUDO tee /etc/systemd/system/topology-agent.service >/dev/null <<EOF
 [Unit]
