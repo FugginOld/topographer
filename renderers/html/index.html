@@ -48,7 +48,10 @@
   .item.active{border-color:var(--hud);background:rgba(var(--glow),.1);box-shadow:inset 0 0 20px rgba(var(--glow),.08)}
   .item.active::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--hud);border-radius:4px 0 0 4px}
   .item .nm{font-size:11px;color:#cdeaf7;letter-spacing:.03em}
-  .item .mt{font-size:8px;color:var(--hud-dim);letter-spacing:.06em;margin-top:5px}
+  .item .ip{font-size:9px;color:var(--hud);letter-spacing:.04em;margin-top:3px;opacity:.8;font-variant-numeric:tabular-nums}
+  .item .mt{font-size:8px;color:var(--hud-dim);letter-spacing:.06em;margin-top:4px}
+  #list .section{font-size:8.5px;letter-spacing:.2em;color:var(--hud-dim);padding:12px 4px 4px;margin-top:4px}
+  #list .section:first-child{margin-top:2px}
   .item .del{position:absolute;top:9px;right:9px;width:16px;height:16px;border:none;background:transparent;color:var(--hud-dim);cursor:pointer;font-size:13px;line-height:1;opacity:0;transition:.15s}
   .item:hover .del{opacity:1} .item .del:hover{color:var(--crit)}
   #sidebar .foot{padding:4px 16px 12px;font-size:8px;color:var(--hud-dim);letter-spacing:.1em;line-height:1.7}
@@ -167,15 +170,20 @@ async function loadList(){
 function renderList(){
   const list=document.getElementById('list');list.innerHTML='';
   if(!TOPOS.length){ list.innerHTML='<div class="empty">no topologies yet.<br><br>hit GENERATE, or run<br><code>python make_pc_topology.py</code></div>'; return; }
-  TOPOS.forEach(t=>{
+  const item=t=>{
     const d=document.createElement('div');
     d.className='item'+(t.id===activeId?' active':'');
     const when=(t.generated||'').replace('T',' ').slice(0,16);
-    d.innerHTML=`<button class="del" title="delete">×</button><div class="nm">${t.name||t.id}</div><div class="mt">${t.modules||0} modules · ${when}</div>`;
+    const ip=t.ip?`<div class="ip">${t.ip}</div>`:'';
+    d.innerHTML=`<button class="del" title="delete">×</button><div class="nm">${t.name||t.id}</div>${ip}<div class="mt">${t.modules||0} modules · ${when}</div>`;
     d.onclick=e=>{ if(e.target.classList.contains('del'))return; selectTopo(t.id); };
     d.querySelector('.del').onclick=e=>{e.stopPropagation();delTopo(t);};
     list.appendChild(d);
-  });
+  };
+  const section=label=>{ const h=document.createElement('div'); h.className='section'; h.textContent=label; list.appendChild(h); };
+  const net=TOPOS.filter(t=>t.kind==='network'), hosts=TOPOS.filter(t=>t.kind!=='network');
+  if(net.length){ section('NETWORK TOPOLOGY'); net.forEach(item); }
+  if(hosts.length){ section('MACHINES'); hosts.forEach(item); }
 }
 async function selectTopo(id){
   activeId=id; pinned=null; renderList();

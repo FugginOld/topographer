@@ -82,6 +82,8 @@ def entry(path: str) -> dict:
         "name": d.get("name") or os.path.splitext(os.path.basename(path))[0],
         "generated": d.get("generated", ""),
         "modules": len(d.get("nodes", [])),
+        "kind": d.get("kind", "host"),   # "network" map vs a machine's hardware
+        "ip": d.get("source", ""),       # push origin IP for reported hosts
     }
 
 
@@ -202,7 +204,8 @@ def generate_network(subnet: str | None = None) -> dict:
         raise RuntimeError((r.stderr or r.stdout or "scan produced nothing").strip()[-800:])
     with open(src, encoding="utf-8") as fh:
         d = json.load(fh)
-    topo = {"name": "Network", "generated": d.get("generated"), "nodes": _network_cards(d)}
+    topo = {"name": "Network", "kind": "network",
+            "generated": d.get("generated"), "nodes": _network_cards(d)}
     with open(store_path("network"), "w", encoding="utf-8") as fh:
         json.dump(topo, fh, indent=2)
     return {"id": "network", "name": "Network", "nodes": len(topo["nodes"])}
