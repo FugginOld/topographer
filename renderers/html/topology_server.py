@@ -391,8 +391,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self._send(200, scan_host(host, name))
                 except RuntimeError as e:
                     # server_ip so the client builds a LAN-reachable bootstrap
-                    # command (its own location may be localhost)
-                    return self._send(502, {"error": str(e), "server_ip": server_ip()})
+                    # command (its own location may be localhost). ssh_tried tells
+                    # the client whether this was a real SSH failure (show why) or
+                    # just remote_scan being off (the normal manual-add flow).
+                    return self._send(502, {"error": str(e), "server_ip": server_ip(),
+                                            "ssh_tried": bool(_remote_scan_cfg().get("enabled"))})
             if self.path == "/api/delete":
                 try:
                     fp = store_path(self._body().get("id", ""))

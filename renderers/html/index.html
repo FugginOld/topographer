@@ -539,11 +539,14 @@ async function scanHost(name,ip){
   const persistent=`curl -fsSL ${B} | TOPO_SERVER=${srv} bash`;
   const snapshot  =`curl -fsSL ${B} | TOPO_SERVER=${srv} TOPO_ONCE=1 bash`;
   const lbl=t=>`<div style="margin-top:14px;font-size:8.5px;letter-spacing:.14em;color:var(--hud-dim)">${t}</div>`;
+  // only surface the server message when an SSH scan was actually attempted and
+  // failed — when remote_scan is simply off, the manual add is the normal flow
+  const why=(data.ssh_tried&&data.error)?` <span style="opacity:.6">(SSH scan failed: ${data.error})</span>`:'';
   showNotice("Add "+name,
     `<div><b style="color:var(--hud)">${name}</b> isn't reporting yet. Run one of these on it:</div>`
     +lbl('ALWAYS-ON DEVICE · PERSISTENT SERVICE')+`<div class="nc-cmd">${persistent}</div>`
     +lbl('LAPTOP / PC · ONE-TIME SNAPSHOT')+`<div class="nc-cmd">${snapshot}</div>`
-    +`<div style="margin-top:14px;color:var(--hud-dim)">Waiting for it to report — this opens its map automatically. <span style="opacity:.6">(${data.error||''})</span></div>`);
+    +`<div style="margin-top:14px;color:var(--hud-dim)">Waiting for <b style="color:var(--hud)">${name}</b> to report — this opens its map automatically.${why}</div>`);
   watchForHost(name,ip);   // auto-advance when the machine starts reporting
 }
 stage.addEventListener('contextmenu',e=>{
