@@ -107,7 +107,7 @@ def devices_to_items(devices: list[dict], ts: str) -> list[dict]:
             continue
         items.append({
             "kind": "node",
-            "ip": d.get("ip"),
+            "ip": d.get("lan_ip") or d.get("ip"),   # gateway .ip is the WAN/public IP
             "mac": mac,
             "name": d.get("name") or d.get("model") or mac,
             "nodekind": _DEV_KIND.get(d.get("type"), "switch"),
@@ -215,11 +215,14 @@ if __name__ == "__main__":  # ponytail: transform self-check, no live controller
     z = networks_to_zones(nets, {})
     assert z == [{"vid": 50, "name": "IoT", "subnet": "10.0.50.1/24",
                   "policy": "", "cls": "iot"}], z
-    devs = [{"mac": "aa:bb:cc:00:00:01", "name": "core-sw", "type": "usw", "ip": "10.0.10.2",
+    devs = [{"mac": "aa:bb:cc:00:00:00", "name": "gw", "type": "udm",
+             "ip": "47.1.2.3", "lan_ip": "10.0.10.1"},          # gateway: ip=WAN, use lan_ip
+            {"mac": "aa:bb:cc:00:00:01", "name": "core-sw", "type": "usw", "ip": "10.0.10.2",
              "uplink": {"uplink_mac": "aa:bb:cc:00:00:00", "uplink_remote_port": 1}}]
     di = devices_to_items(devs, "t")
-    assert di[0]["nodekind"] == "switch" and di[1]["kind"] == "link", di
-    assert di[1]["dst"] == "aa:bb:cc:00:00:00" and di[1]["port"] == 1, di
+    assert di[0]["ip"] == "10.0.10.1", di[0]           # not the public WAN ip
+    assert di[1]["nodekind"] == "switch" and di[2]["kind"] == "link", di
+    assert di[2]["dst"] == "aa:bb:cc:00:00:00" and di[2]["port"] == 1, di
     cl = [{"mac": "de:ad:be:ef:00:01", "ip": "10.0.50.9", "hostname": "cam1",
            "is_wired": True, "sw_mac": "aa:bb:cc:00:00:01", "sw_port": 7}]
     n = clients_to_nodes(cl, "t")
