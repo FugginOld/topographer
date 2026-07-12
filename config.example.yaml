@@ -36,6 +36,17 @@ arpscan:
     - 10.0.40.0/24
   # interfaces: [eth0.10, eth0.30]   # alternative to subnets
 
+# pingsweep: zero-install discovery (OS ping + arp cache). Use this instead of
+# arpscan on Windows or anywhere without arp-scan/nmap/sudo.
+pingsweep:
+  enabled: false
+  subnets:
+    - 10.0.10.0/24
+    - 10.0.30.0/24
+  timeout_ms: 500
+  workers: 64
+  resolve: true
+
 unifi_snmp:
   enabled: false
   switches:

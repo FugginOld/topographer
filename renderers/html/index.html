@@ -35,10 +35,11 @@
   #sidebar .head{padding:18px 16px 12px;border-bottom:1px solid var(--line)}
   #sidebar .head h2{font-size:12px;letter-spacing:.24em;color:var(--hud);text-shadow:0 0 10px rgba(var(--glow),.4)}
   #sidebar .head .sub{font-size:8.5px;color:var(--hud-dim);letter-spacing:.12em;margin-top:5px}
-  #addbtn{margin:12px 14px;padding:9px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
-    color:var(--hud);font-family:inherit;font-size:10px;letter-spacing:.14em;cursor:pointer;transition:.15s}
-  #addbtn:hover{border-color:var(--hud);background:rgba(var(--glow),.08);box-shadow:0 0 14px rgba(var(--glow),.15)}
-  #addbtn:disabled{opacity:.5;cursor:wait}
+  #addbtn,#netbtn{margin:12px 14px;padding:9px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
+    color:var(--hud);font-family:inherit;font-size:10px;letter-spacing:.14em;cursor:pointer;transition:.15s;display:block;width:calc(100% - 28px)}
+  #netbtn{margin-top:0}
+  #addbtn:hover,#netbtn:hover{border-color:var(--hud);background:rgba(var(--glow),.08);box-shadow:0 0 14px rgba(var(--glow),.15)}
+  #addbtn:disabled,#netbtn:disabled{opacity:.5;cursor:wait}
   #list{flex:1;overflow-y:auto;padding:0 10px}
   #list .empty{padding:20px 12px;font-size:9px;color:var(--hud-dim);letter-spacing:.08em;line-height:1.8;text-align:center}
   #list .empty code{color:var(--hud)}
@@ -87,6 +88,7 @@
 <aside id="sidebar">
   <div class="head"><h2>T O P O L O G I E S</h2><div class="sub">pc hardware fabric maps</div></div>
   <button id="addbtn">+ &nbsp; G E N E R A T E</button>
+  <button id="netbtn">⊹ &nbsp; S C A N &nbsp; N E T W O R K</button>
   <div id="list"></div>
   <div id="legend">lane class
     <div><i style="background:var(--gen5)"></i>Gen5</div>
@@ -132,6 +134,9 @@ const CLS={}, COL={};
 function refreshColors(){
   const s=getComputedStyle(document.body), g=n=>s.getPropertyValue(n).trim();
   CLS.gen5=g('--gen5');CLS.gen4=g('--gen4');CLS.gen3=g('--gen3');
+  // network zone classes (from make_topology zones) -> fixed bands, matches static_svg
+  Object.assign(CLS,{mgmt:'#63d0ff',lan:'#46e0a4',srv:'#ffc451',adsb:'#ff9d5c',
+    iot:'#ff5f6d',guest:'#8b7bff',dmz:'#ff9d5c',unknown:'#8899aa'});
   COL.line=g('--line');COL.hud=g('--hud');COL.dim=g('--hud-dim');
   COL.ok=g('--ok');COL.warn=g('--warn');COL.crit=g('--crit');COL.down=g('--down');
   COL.title=g('--card-title');COL.fill=g('--card-fill');COL.fillBig=g('--card-fill-big');COL.barBg=g('--bar-bg');
@@ -201,6 +206,18 @@ document.getElementById('addbtn').onclick=async e=>{
     activeId=data.id; await loadList();
   }catch(err){ showErr('generate failed:<br><br><code>'+err.message+'</code>'); }
   finally{ btn.disabled=false; btn.innerHTML='+ &nbsp; G E N E R A T E'; }
+};
+document.getElementById('netbtn').onclick=async e=>{
+  const subnet=prompt('Subnet to scan (blank = auto-detect this machine’s /24):','');
+  if(subnet===null)return;                              // cancelled
+  const btn=e.target; btn.disabled=true; btn.textContent='… SCANNING NETWORK';
+  try{
+    const r=await fetch('api/generate-network',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subnet:subnet.trim()})});
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||('HTTP '+r.status));
+    activeId=data.id; await loadList();
+  }catch(err){ showErr('network scan failed:<br><br><code>'+err.message+'</code>'); }
+  finally{ btn.disabled=false; btn.innerHTML='⊹ &nbsp; S C A N &nbsp; N E T W O R K'; }
 };
 function spaced(s){return (s||'').toUpperCase().split('').join(' ');}
 function showErr(html){const err=document.getElementById('err');err.style.display='flex';err.innerHTML=html;svg.innerHTML='';}

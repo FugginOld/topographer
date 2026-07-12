@@ -20,6 +20,7 @@ from renderers import mermaid, static_svg
 
 # collector registry: name -> (module path, class)
 from collectors.arpscan import ArpScanCollector
+from collectors.pingsweep import PingSweepCollector
 from collectors.opnsense import OPNsenseCollector
 from collectors.unifi_snmp import UnifiSnmpCollector
 from collectors.tailscale import TailscaleCollector
@@ -29,6 +30,7 @@ from collectors.dns import DnsCollector
 COLLECTORS = {
     "opnsense": OPNsenseCollector,     # zones + names first
     "arpscan": ArpScanCollector,
+    "pingsweep": PingSweepCollector,   # no-deps discovery (Windows-friendly)
     "unifi_snmp": UnifiSnmpCollector,
     "tailscale": TailscaleCollector,
     "docker": DockerCollector,

@@ -113,6 +113,69 @@ def generate(name: str) -> dict:
     return {"id": tid, "name": name}
 
 
+def _network_cards(d: dict) -> list[dict]:
+    """Reshape a make_topology.py network JSON (zones/nodes) into the dashboard's
+    node/parent tree so the existing renderer draws it: NETWORK -> VLAN -> host."""
+    import ipaddress
+    zones = d.get("zones", [])
+    znets = []
+    for z in zones:
+        try:
+            znets.append((z, ipaddress.ip_network(z.get("subnet", ""), strict=False)))
+        except ValueError:
+            znets.append((z, None))
+    cards = [{"id": "net", "label": "NETWORK", "kind": "root"}]
+    for z in zones:
+        cards.append({"id": f"vlan{z['vid']}", "parent": "net", "label": z["name"],
+                      "sub": z.get("subnet", ""), "cls": z.get("cls", "unknown"), "kind": "zone",
+                      "meta": {"vlan": z["vid"], "subnet": z.get("subnet", ""),
+                               "policy": z.get("policy", "")}})
+    for n in d.get("nodes", []):
+        ip, parent, cls = n.get("ip"), "net", None
+        for z, net in znets:
+            try:
+                if net and ip and ipaddress.ip_address(ip) in net:
+                    parent, cls = f"vlan{z['vid']}", z.get("cls", "unknown")
+                    break
+            except ValueError:
+                pass
+        meta = {k: v for k, v in (("ip", n.get("ip")), ("mac", n.get("mac")),
+                ("vendor", n.get("vendor")), ("type", n.get("kind")),
+                ("online", "yes" if n.get("online") else "no"),
+                ("last seen", n.get("last_seen"))) if v}
+        cards.append({"id": n.get("id") or ip, "parent": parent,
+                      "label": n.get("name") or ip, "sub": n.get("ip") or "",
+                      "cls": cls, "kind": n.get("kind", "host"), "meta": meta})
+    return cards
+
+
+def generate_network(subnet: str | None = None) -> dict:
+    """Ping-sweep the network and save it as the 'network' topology card. Uses
+    config.yaml if present (honours the user's zones/collectors), else a throwaway
+    config that enables pingsweep with auto subnet detection — zero setup."""
+    os.makedirs(STORE, exist_ok=True)
+    cfg_path = os.path.join(ROOT, "config.yaml")
+    if not os.path.exists(cfg_path):
+        cfg_path = os.path.join(ROOT, "out", ".netscan.yaml")
+        subs = f"[{subnet}]" if subnet else "[]"
+        with open(cfg_path, "w", encoding="utf-8") as fh:
+            fh.write("offline_after_minutes: 30\npingsweep:\n  enabled: true\n"
+                     f"  subnets: {subs}\n  resolve: true\n")
+    r = subprocess.run(
+        [sys.executable, "make_topology.py", "--config", cfg_path, "--outdir", "out"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    src = os.path.join(ROOT, "out", "topology.json")
+    if not os.path.exists(src):
+        raise RuntimeError((r.stderr or r.stdout or "scan produced nothing").strip()[-800:])
+    with open(src, encoding="utf-8") as fh:
+        d = json.load(fh)
+    topo = {"name": "Network", "generated": d.get("generated"), "nodes": _network_cards(d)}
+    with open(store_path("network"), "w", encoding="utf-8") as fh:
+        json.dump(topo, fh, indent=2)
+    return {"id": "network", "name": "Network", "nodes": len(topo["nodes"])}
+
+
 sys.path.insert(0, ROOT)    # repo root — where telemetry.py and the generators live
 import telemetry as _tele   # noqa: E402  shared local-metrics sampler
 
@@ -193,6 +256,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if self.path == "/api/generate":
                 name = (self._body().get("name") or "topology").strip()
                 return self._send(200, generate(name))
+            if self.path == "/api/generate-network":
+                subnet = (self._body().get("subnet") or "").strip() or None
+                return self._send(200, generate_network(subnet))
             if self.path == "/api/delete":
                 try:
                     fp = store_path(self._body().get("id", ""))
