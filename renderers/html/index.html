@@ -509,7 +509,18 @@ function showNotice(title,bodyHtml,busy){
   notice.classList.toggle('busy',!!busy);
   notice.style.display='flex';
 }
-function hideNotice(){notice.style.display='none';}
+let hostWatch=null;
+function hideNotice(){notice.style.display='none';clearInterval(hostWatch);hostWatch=null;}
+// poll the list; when the host starts reporting, open its map automatically
+function watchForHost(name,ip){
+  clearInterval(hostWatch); let tries=0;
+  hostWatch=setInterval(async()=>{
+    if(++tries>120){ clearInterval(hostWatch); return; }   // give up after ~6 min
+    await loadList();
+    const m=findMachine(name,ip);
+    if(m){ hideNotice(); selectTopo(m.id); }
+  },3000);
+}
 notice.querySelector('.nc-x').onclick=hideNotice;
 notice.addEventListener('click',e=>{ if(e.target===notice&&!notice.classList.contains('busy'))hideNotice(); });
 function fmtMsg(msg){                                // command-looking lines -> code blocks
@@ -525,7 +536,11 @@ async function scanHost(name,ip){
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||('HTTP '+r.status));
     hideNotice(); await loadList(); selectTopo(data.id);
-  }catch(err){ showNotice("Couldn't scan "+name, fmtMsg(err.message)); }
+  }catch(err){
+    showNotice("Add "+name, fmtMsg(err.message)
+      +`<div style="margin-top:12px;color:var(--hud-dim)">Waiting for <b style="color:var(--hud)">${name}</b> to report — this will open its map automatically once it does.</div>`);
+    watchForHost(name,ip);   // auto-advance when the machine starts reporting
+  }
 }
 stage.addEventListener('contextmenu',e=>{
   hideCtx();                                                // clear any open menu first
