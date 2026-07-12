@@ -117,9 +117,19 @@ def generate(name: str) -> dict:
     return {"id": tid, "name": name}
 
 
+def _node_meta(n: dict) -> dict:
+    """Detail rows for a node: its collector-supplied meta first, then basics."""
+    basics = {k: v for k, v in (("ip", n.get("ip")), ("mac", n.get("mac")),
+              ("vendor", n.get("vendor")), ("type", n.get("kind")),
+              ("online", "yes" if n.get("online") else "no"),
+              ("last seen", n.get("last_seen"))) if v}
+    return {**(n.get("meta") or {}), **basics}
+
+
 def _network_cards(d: dict) -> list[dict]:
-    """Reshape a make_network_topology.py network JSON (zones/nodes) into the dashboard's
-    node/parent tree so the existing renderer draws it: NETWORK -> VLAN -> host."""
+    """Reshape a network JSON into the dashboard's node/parent tree. When a
+    gateway is known the spine is WAN -> Gateway -> VLAN -> host; otherwise it
+    falls back to a synthetic NETWORK root (e.g. a ping-sweep-only scan)."""
     import ipaddress
     zones = d.get("zones", [])
     znets = []
@@ -128,14 +138,36 @@ def _network_cards(d: dict) -> list[dict]:
             znets.append((z, ipaddress.ip_network(z.get("subnet", ""), strict=False)))
         except ValueError:
             znets.append((z, None))
-    cards = [{"id": "net", "label": "NETWORK", "kind": "root"}]
+
+    nodes = d.get("nodes", [])
+    gw = next((n for n in nodes if n.get("kind") == "firewall"), None)
+    wan = next((n for n in nodes if n.get("kind") == "wan"), None)
+    skip = {id(gw), id(wan)}                      # placed explicitly, not as hosts
+
+    cards = []
+    if gw:
+        gw_id = gw.get("id") or gw.get("mac") or gw.get("ip")
+        if wan:
+            cards.append({"id": "wan", "label": "WAN / INTERNET", "kind": "wan",
+                          "cls": "mgmt", "sub": wan.get("ip") or "", "meta": _node_meta(wan)})
+        cards.append({"id": gw_id, "parent": ("wan" if wan else None),
+                      "label": gw.get("name") or gw_id, "sub": gw.get("ip") or "",
+                      "cls": "mgmt", "kind": "firewall", "meta": _node_meta(gw)})
+        zone_root = gw_id
+    else:
+        cards.append({"id": "net", "label": "NETWORK", "kind": "root"})
+        zone_root = "net"
+
     for z in zones:
-        cards.append({"id": f"vlan{z['vid']}", "parent": "net", "label": z["name"],
+        cards.append({"id": f"vlan{z['vid']}", "parent": zone_root, "label": z["name"],
                       "sub": z.get("subnet", ""), "cls": z.get("cls", "unknown"), "kind": "zone",
                       "meta": {"vlan": z["vid"], "subnet": z.get("subnet", ""),
                                "policy": z.get("policy", "")}})
-    for n in d.get("nodes", []):
-        ip, parent, cls = n.get("ip"), "net", None
+
+    for n in nodes:
+        if id(n) in skip:
+            continue
+        ip, parent, cls = n.get("ip"), zone_root, None
         for z, net in znets:
             try:
                 if net and ip and ipaddress.ip_address(ip) in net:
@@ -143,13 +175,9 @@ def _network_cards(d: dict) -> list[dict]:
                     break
             except ValueError:
                 pass
-        meta = {k: v for k, v in (("ip", n.get("ip")), ("mac", n.get("mac")),
-                ("vendor", n.get("vendor")), ("type", n.get("kind")),
-                ("online", "yes" if n.get("online") else "no"),
-                ("last seen", n.get("last_seen"))) if v}
         cards.append({"id": n.get("id") or ip, "parent": parent,
                       "label": n.get("name") or ip, "sub": n.get("ip") or "",
-                      "cls": cls, "kind": n.get("kind", "host"), "meta": meta})
+                      "cls": cls, "kind": n.get("kind", "host"), "meta": _node_meta(n)})
     return cards
 
 

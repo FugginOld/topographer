@@ -60,6 +60,7 @@ class Node:
     online: bool = True
     last_seen: Optional[str] = None
     sources: list[str] = field(default_factory=list)  # which collectors saw it
+    meta: dict = field(default_factory=dict)  # source-specific extras (gateway model/firmware/WAN...)
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -106,14 +106,22 @@ def clients_to_nodes(clients: list[dict], ts: str) -> list[dict]:
     return nodes
 
 
+def _fmt_uptime(secs) -> str | None:
+    if not secs:
+        return None
+    secs = int(secs)
+    d, h = secs // 86400, (secs % 86400) // 3600
+    return f"{d}d {h}h" if d else f"{h}h"
+
+
 def devices_to_items(devices: list[dict], ts: str) -> list[dict]:
-    """Infra nodes (gateway/switch/AP) + their uplink links."""
+    """Infra nodes (gateway/switch/AP), gateway detail + WAN node, uplink links."""
     items = []
     for d in devices:
         mac = d.get("mac")
         if not mac:
             continue
-        items.append({
+        node = {
             "kind": "node",
             "ip": d.get("lan_ip") or d.get("ip"),   # gateway .ip is the WAN/public IP
             "mac": mac,
@@ -121,8 +129,36 @@ def devices_to_items(devices: list[dict], ts: str) -> list[dict]:
             "nodekind": _DEV_KIND.get(d.get("type"), "switch"),
             "online": d.get("state", 1) == 1,
             "last_seen": ts,
-        })
+        }
         up = d.get("uplink") or {}
+        is_gw = d.get("type") in ("ugw", "udm", "uxg")
+        if is_gw:
+            # gateway: full identity + WAN uplink (up is the WAN interface dict)
+            wan_ip = up.get("ip") or d.get("last_wan_ip")
+            isp_gw = (up.get("gateways") or [None])[0]
+            wan_link = " ".join(x for x in (up.get("media"),
+                                "up" if up.get("up") else "down") if x) or None
+            node["meta"] = {k: v for k, v in (
+                ("model", d.get("model")),
+                ("firmware", d.get("displayable_version") or d.get("version")),
+                ("lan ip", d.get("lan_ip")),
+                ("wan ip", wan_ip),
+                ("uptime", _fmt_uptime(d.get("uptime"))),
+                ("serial", d.get("serial")),
+            ) if v}
+            items.append(node)
+            if wan_ip:                                  # WAN node + gateway->WAN link
+                items.append({
+                    "kind": "node", "ip": wan_ip, "name": "WAN / Internet",
+                    "nodekind": "wan", "online": bool(up.get("up", True)), "last_seen": ts,
+                    "meta": {k: v for k, v in (("public ip", wan_ip),
+                             ("isp gateway", isp_gw), ("link", wan_link),
+                             ("interface", up.get("name"))) if v},
+                })
+                items.append({"kind": "link", "src": norm_mac(mac), "dst": wan_ip,
+                              "linkkind": "uplink", "port": up.get("name")})
+            continue
+        items.append(node)
         up_mac = up.get("uplink_mac") or up.get("uplink_device_mac")
         if up_mac:
             items.append({"kind": "link", "src": norm_mac(mac), "dst": norm_mac(up_mac),
@@ -227,13 +263,22 @@ if __name__ == "__main__":  # ponytail: transform self-check, no live controller
     assert z == [{"vid": 50, "name": "IoT", "subnet": "10.0.50.1/24",
                   "policy": "", "cls": "iot"}], z
     devs = [{"mac": "aa:bb:cc:00:00:00", "name": "gw", "type": "udm",
-             "ip": "47.1.2.3", "lan_ip": "10.0.10.1"},          # gateway: ip=WAN, use lan_ip
+             "ip": "47.1.2.3", "lan_ip": "10.0.10.1", "model": "UDMPRO",
+             "displayable_version": "4.0.6", "uptime": 90000,
+             "uplink": {"ip": "47.1.2.3", "gateways": ["47.1.2.1"],
+                        "media": "10GE", "up": True, "name": "eth4"}},
             {"mac": "aa:bb:cc:00:00:01", "name": "core-sw", "type": "usw", "ip": "10.0.10.2",
              "uplink": {"uplink_mac": "aa:bb:cc:00:00:00", "uplink_remote_port": 1}}]
     di = devices_to_items(devs, "t")
-    assert di[0]["ip"] == "10.0.10.1", di[0]           # not the public WAN ip
-    assert di[1]["nodekind"] == "switch" and di[2]["kind"] == "link", di
-    assert di[2]["dst"] == "aa:bb:cc:00:00:00" and di[2]["port"] == 1, di
+    gw = di[0]
+    assert gw["ip"] == "10.0.10.1", gw                 # LAN ip, not the public WAN ip
+    assert gw["meta"]["model"] == "UDMPRO" and gw["meta"]["wan ip"] == "47.1.2.3", gw
+    wan = di[1]
+    assert wan["nodekind"] == "wan" and wan["ip"] == "47.1.2.3", wan
+    assert wan["meta"]["isp gateway"] == "47.1.2.1", wan
+    assert di[2]["kind"] == "link" and di[2]["dst"] == "47.1.2.3", di[2]
+    assert di[3]["nodekind"] == "switch", di[3]
+    assert di[4]["dst"] == "aa:bb:cc:00:00:00" and di[4]["port"] == 1, di[4]
     cl = [{"mac": "de:ad:be:ef:00:01", "ip": "10.0.50.9", "hostname": "cam1",
            "is_wired": True, "sw_mac": "aa:bb:cc:00:00:01", "sw_port": 7}]
     n = clients_to_nodes(cl, "t")

@@ -81,6 +81,8 @@ def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
             if raw.get("online") is not None:
                 n.online = n.online or bool(raw["online"])
             n.last_seen = raw.get("last_seen") or n.last_seen
+            if raw.get("meta"):
+                n.meta.update(raw["meta"])
         else:
             n = Node(
                 id=key.split(":", 1)[1],
@@ -94,6 +96,7 @@ def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
                 online=bool(raw.get("online", True)),
                 last_seen=raw.get("last_seen"),
                 sources=[src],
+                meta=dict(raw.get("meta") or {}),
             )
             node_by_key[key] = n
 
