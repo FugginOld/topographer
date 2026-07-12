@@ -390,7 +390,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 try:
                     return self._send(200, scan_host(host, name))
                 except RuntimeError as e:
-                    return self._send(502, {"error": str(e)})
+                    # server_ip so the client builds a LAN-reachable bootstrap
+                    # command (its own location may be localhost)
+                    return self._send(502, {"error": str(e), "server_ip": server_ip()})
             if self.path == "/api/delete":
                 try:
                     fp = store_path(self._body().get("id", ""))

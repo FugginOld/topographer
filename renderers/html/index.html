@@ -525,23 +525,26 @@ notice.querySelector('.nc-x').onclick=hideNotice;
 notice.addEventListener('click',e=>{ if(e.target===notice&&!notice.classList.contains('busy'))hideNotice(); });
 async function scanHost(name,ip){
   showNotice('Scanning '+name,`Contacting <b>${ip}</b> over SSH — this can take a few seconds…`,true);
+  let data={};
   try{
     const r=await fetch('api/scan-host',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:ip,name})});
-    const data=await r.json();
-    if(!r.ok) throw new Error(data.error||('HTTP '+r.status));
-    hideNotice(); await loadList(); selectTopo(data.id);
-  }catch(err){
-    const B='https://raw.githubusercontent.com/FugginOld/topologygenerator/main/bootstrap.sh';
-    const persistent=`curl -fsSL ${B} | TOPO_SERVER=${location.origin} bash`;
-    const snapshot  =`curl -fsSL ${B} | TOPO_SERVER=${location.origin} TOPO_ONCE=1 bash`;
-    const lbl=t=>`<div style="margin-top:14px;font-size:8.5px;letter-spacing:.14em;color:var(--hud-dim)">${t}</div>`;
-    showNotice("Add "+name,
-      `<div><b style="color:var(--hud)">${name}</b> isn't reporting yet. Run one of these on it:</div>`
-      +lbl('ALWAYS-ON DEVICE · PERSISTENT SERVICE')+`<div class="nc-cmd">${persistent}</div>`
-      +lbl('LAPTOP / PC · ONE-TIME SNAPSHOT')+`<div class="nc-cmd">${snapshot}</div>`
-      +`<div style="margin-top:14px;color:var(--hud-dim)">Waiting for it to report — this opens its map automatically. <span style="opacity:.6">(${err.message})</span></div>`);
-    watchForHost(name,ip);   // auto-advance when the machine starts reporting
-  }
+    data=await r.json();
+    if(r.ok){ hideNotice(); await loadList(); selectTopo(data.id); return; }
+  }catch(e){ data={error:e.message}; }
+  // not scanned -> show how to add it. Use the server's LAN IP (our own URL may
+  // be localhost, which is meaningless on the remote machine we're telling to report).
+  const port=location.port||'8770';
+  const srv=data.server_ip?`http://${data.server_ip}:${port}`:location.origin;
+  const B='https://raw.githubusercontent.com/FugginOld/topologygenerator/main/bootstrap.sh';
+  const persistent=`curl -fsSL ${B} | TOPO_SERVER=${srv} bash`;
+  const snapshot  =`curl -fsSL ${B} | TOPO_SERVER=${srv} TOPO_ONCE=1 bash`;
+  const lbl=t=>`<div style="margin-top:14px;font-size:8.5px;letter-spacing:.14em;color:var(--hud-dim)">${t}</div>`;
+  showNotice("Add "+name,
+    `<div><b style="color:var(--hud)">${name}</b> isn't reporting yet. Run one of these on it:</div>`
+    +lbl('ALWAYS-ON DEVICE · PERSISTENT SERVICE')+`<div class="nc-cmd">${persistent}</div>`
+    +lbl('LAPTOP / PC · ONE-TIME SNAPSHOT')+`<div class="nc-cmd">${snapshot}</div>`
+    +`<div style="margin-top:14px;color:var(--hud-dim)">Waiting for it to report — this opens its map automatically. <span style="opacity:.6">(${data.error||''})</span></div>`);
+  watchForHost(name,ip);   // auto-advance when the machine starts reporting
 }
 stage.addEventListener('contextmenu',e=>{
   hideCtx();                                                // clear any open menu first

@@ -72,7 +72,8 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
   $SUDO systemctl daemon-reload
-  $SUDO systemctl enable --now topology-agent
+  $SUDO systemctl enable topology-agent
+  $SUDO systemctl restart topology-agent   # restart so a re-run picks up config changes
   echo
   echo "✓ topology-agent is running as a service (starts on boot)."
   echo "  status:  systemctl status topology-agent"
