@@ -180,8 +180,8 @@ def generate_network(subnet: str | None = None) -> dict:
     return {"id": "network", "name": "Network", "nodes": len(topo["nodes"])}
 
 
-sys.path.insert(0, ROOT)    # repo root — where telemetry.py and the generators live
-import telemetry as _tele   # noqa: E402  shared local-metrics sampler
+sys.path.insert(0, ROOT)    # repo root — where local_telemetry.py and the generators live
+import local_telemetry as _tele   # noqa: E402  shared local-metrics sampler
 
 _tele_cache = {"t": 0.0, "data": dict(_tele.ZERO)}
 _host_tele: dict[str, dict] = {}   # host id -> {"t": monotonic, "data": {...}}

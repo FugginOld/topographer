@@ -6,11 +6,11 @@ make_linux_topology.py on Linux) and POSTs the JSON to the server's
 /api/ingest. Each host stores as one stable entry (re-pushes overwrite),
 so schedule this to keep the map fresh:
 
-    Windows : Task Scheduler -> python agent.py --server http://dash.lan:8770
+    Windows : Task Scheduler -> python topology_agent.py --server http://dash.lan:8770
     Linux   : systemd timer / cron -> same command
 
-    python agent.py --server http://HOST:8770 [--name NAME] [--token SECRET]
-    python agent.py --server http://HOST:8770 --file out/topologies/x.json   # re-push, no scan
+    python topology_agent.py --server http://HOST:8770 [--name NAME] [--token SECRET]
+    python topology_agent.py --server http://HOST:8770 --file out/topologies/x.json   # re-push, no scan
 
 --name defaults to this machine's hostname. --token must match the server's
 TOPO_TOKEN env var if it sets one. Needs make_*_topology.py alongside this file.
@@ -30,7 +30,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import telemetry as _tele   # noqa: E402  same sampler topology_server.py uses
+import local_telemetry as _tele   # noqa: E402  same sampler topology_server.py uses
 
 GENERATOR = "make_pc_topology.py" if sys.platform.startswith("win") else "make_linux_topology.py"
 

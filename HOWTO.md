@@ -221,8 +221,8 @@ vendor/driver, so only `CPU %` shows there.
 
 **A one-shot push (topology only, no live telemetry):**
 ```bash
-python3 agent.py --server http://192.168.1.225:8770        # Linux
-python agent.py --server http://192.168.1.225:8770         # Windows
+python3 topology_agent.py --server http://192.168.1.225:8770        # Linux
+python topology_agent.py --server http://192.168.1.225:8770         # Windows
 ```
 Add `--report` (what `report.sh`/`report.ps1` do) to also stream live telemetry.
 
@@ -243,8 +243,8 @@ Add `--report` (what `report.sh`/`report.ps1` do) to also stream live telemetry.
 | `renderers/html/index.html` | the dashboard UI |
 | `make_pc_topology.py` | Windows hardware scan |
 | `make_linux_topology.py` | Linux hardware scan |
-| `telemetry.py` | live CPU/net/disk/temp sampler (both OSes) |
-| `agent.py` | push topology + telemetry to the server |
+| `local_telemetry.py` | live CPU/net/disk/temp sampler (both OSes) |
+| `topology_agent.py` | push topology + telemetry to the server |
 | `report.sh` / `report.ps1` | run the agent (self-updating) |
 | `bootstrap.sh` | fresh-Debian one-liner |
 | `systemd/topology-agent.service` | persistent Linux reporting |

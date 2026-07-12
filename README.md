@@ -30,7 +30,7 @@ Map the real hardware of every machine on your network and watch them live:
   topology and live telemetry (`report.sh` on Linux, `report.ps1` on Windows, or
   the `bootstrap.sh` one-liner for a fresh Debian box).
 - Scanners: `make_pc_topology.py` (Windows, PnP/CIM) and `make_linux_topology.py`
-  (Linux, sysfs/proc). Live metrics: `telemetry.py` (real CPU temp on Linux).
+  (Linux, sysfs/proc). Live metrics: `local_telemetry.py` (real CPU temp on Linux).
 
 Full step-by-step — server firewall, each reporting machine, persistence,
 naming, tokens, troubleshooting — is in **[HOWTO.md](HOWTO.md)**.
@@ -107,8 +107,8 @@ make_network_topology.py   network topology orchestrator
 # hardware topology + fleet dashboard (see HOWTO.md)
 make_pc_topology.py     Windows hardware scan (PnP/CIM)
 make_linux_topology.py  Linux hardware scan (sysfs/proc)
-telemetry.py            shared live CPU/net/disk/temp sampler
-agent.py                push topology + telemetry to the server
+local_telemetry.py            shared live CPU/net/disk/temp sampler
+topology_agent.py                push topology + telemetry to the server
 report.sh · report.ps1  run the agent (self-updating)
 server.ps1              start the dashboard (firewall + topology_server.py)
 bootstrap.sh            fresh-Debian one-liner
