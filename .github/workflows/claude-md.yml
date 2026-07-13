@@ -1,0 +1,42 @@
+name: Generate CLAUDE.md
+
+# Manual only — run from the Actions tab ("Run workflow"). Regenerates the root
+# CLAUDE.md from the repo's detected stack and commits it if it changed. Change
+# `on:` to add a schedule or push trigger if you want it to run automatically.
+on:
+  workflow_dispatch:
+    inputs:
+      style:
+        description: 'Governance detail level'
+        type: choice
+        options: [minimal, standard, comprehensive]
+        default: comprehensive
+
+permissions:
+  contents: write            # the commit step pushes the regenerated CLAUDE.md
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate CLAUDE.md
+        # Third-party action pinned to the v1.0.0 commit — it runs with write
+        # access, so pin to a SHA rather than a mutable tag.
+        uses: goblinmode2700/claude-md-generator@f1a7320cef9e3bd3643e85902c4973a4f1aef785
+        with:
+          style: ${{ inputs.style }}
+
+      - name: Commit if changed
+        run: |
+          # --porcelain catches both a brand-new and a modified CLAUDE.md
+          # (plain `git diff` would miss an untracked file).
+          if [ -z "$(git status --porcelain -- CLAUDE.md)" ]; then
+            echo "CLAUDE.md unchanged — nothing to commit"; exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CLAUDE.md
+          git commit -m "chore: regenerate CLAUDE.md (${{ inputs.style }})"
+          git push
