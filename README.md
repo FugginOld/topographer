@@ -118,7 +118,7 @@ commit the tooling and `config.example.yaml` (dummy values). One accidental
 collectors/   read-only source adapters (one file per source)
 core/         schema · normalize · enrich · detect (gateway fingerprint) · oui.csv
 renderers/    html/ (dashboard + topology_server.py) · static_svg.py · mermaid.py
-systemd/      timer/service units + topology-agent.service
+systemd/      units: topology-server (dashboard) · topology-agent · timer
 tests/        fixtures + end-to-end pipeline test
 make_network_topology.py   network topology orchestrator (collectors → renderers)
 

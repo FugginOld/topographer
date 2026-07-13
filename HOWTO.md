@@ -3,15 +3,15 @@
 Map the real hardware of every machine on your network and watch them live from
 one dashboard.
 
-- **One dashboard server** (your Windows box, `192.168.1.225`) runs `topology_server.py`,
-  stores every machine's topology, and shows the live HUD.
+- **One dashboard server** (a Linux box, `192.168.1.225`) runs `topology_server.py`
+  as a systemd service, stores every machine's topology, and shows the live HUD.
 - **Each reporting machine** runs a small **agent** that scans its own hardware
   and pushes its topology + live telemetry to the server.
 
 ```text
    Windows PC ─┐
-   Linux box  ─┼──►  http://192.168.1.225:8770   (topology_server.py on the Windows server)
-   Debian srv ─┘      dashboard lists every host, live HUD per host
+   Linux box  ─┼──►  http://192.168.1.225:8770   (topology_server.py service on the Linux host)
+   Proxmox    ─┘      dashboard lists every host, live HUD per host
 ```
 
 Nothing is installed globally; everything is Python 3 stdlib plus a few Linux
@@ -20,45 +20,53 @@ reporting machines is needed — only the server's port `8770` must be reachable
 
 ---
 
-## Part A — Set up the dashboard server (Windows, 192.168.1.225)
+## Part A — Set up the dashboard server (Linux, 192.168.1.225)
 
-Do this **once**, on the machine that will host the dashboard.
+Do this **once**, on the Linux host that will run the dashboard. It runs as a
+systemd service, so it starts on boot and restarts if it dies.
 
-1. **Install Python 3** (if not already): https://www.python.org/downloads/
-   During install, tick **"Add python.exe to PATH"**. Verify:
-   ```powershell
-   python --version
+1. **Install Python 3 + git** (only PyYAML is a Python dep; the dashboard itself
+   is stdlib). On Debian/Ubuntu:
+   ```bash
+   sudo apt-get update && sudo apt-get install -y python3 python3-yaml git
    ```
 
-2. **Get the repo:**
-   ```powershell
-   git clone https://github.com/FugginOld/topologygenerator.git
-   cd topologygenerator
+2. **Get the repo** (into your home dir):
+   ```bash
+   git clone https://github.com/FugginOld/topologygenerator.git ~/topologygenerator
    ```
 
-3. **Start the server** — the launcher opens the firewall, prints the address to
-   give reporting machines, and runs the server. Run it from an **Administrator**
-   PowerShell the first time so it can add the firewall rule (after that, a normal
-   window is fine). Leave the window open.
+3. **Install the service** — edit `User=` and the two paths to match this host,
+   then enable it:
+   ```bash
+   cd ~/topologygenerator
+   sed -e "s#/home/YOUR_USER/topologygenerator#$HOME/topologygenerator#g" -e "s/YOUR_USER/$USER/g" \
+       systemd/topology-server.service | sudo tee /etc/systemd/system/topology-server.service >/dev/null
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now topology-server
+   sudo systemctl status topology-server        # should be "active (running)"
+   journalctl -u topology-server -f             # watch its logs
+   ```
+   > The `sed` fills in your user + home path automatically; edit the unit by hand
+   > if the repo lives elsewhere. To require a token from agents, uncomment the
+   > `Environment=TOPO_TOKEN=…` line in the unit before enabling (see **Part E**).
 
-   ```powershell
-   .\server.ps1
+4. **Open the firewall** for port `8770` (only if this host runs one):
+   ```bash
+   sudo ufw allow 8770/tcp        # ufw
+   # or firewalld:  sudo firewall-cmd --permanent --add-port=8770/tcp && sudo firewall-cmd --reload
    ```
 
-   Prefer to do it by hand? Run this once as Administrator, then start the server
-   any time:
+5. **Open the dashboard:** `http://192.168.1.225:8770` (or `http://localhost:8770`
+   on the server itself).
+   - Click **SCAN NETWORK** to map the LAN; **GENERATE** adds this server's own hardware map.
+   - Other machines appear automatically once their agents report (Part B/C).
 
-   ```powershell
-   New-NetFirewallRule -DisplayName "Topology dashboard" -Direction Inbound -LocalPort 8770 -Protocol TCP -Action Allow
-   python renderers\html\topology_server.py
-   ```
+**To update later:** `cd ~/topologygenerator && git pull && sudo systemctl restart topology-server`.
 
-4. **Open the dashboard:** http://localhost:8770
-   - Click **GENERATE** to add *this* server's own hardware map.
-   - Other machines will appear automatically once their agents report (Part B/C).
-
-> The server can also report itself like any other host — but you don't need to;
-> selecting its locally-generated topology shows the server's own live HUD.
+> Prefer to keep the dashboard on **Windows**? `.\server.ps1` still works (opens
+> the firewall + runs the server); make it persistent via Task Scheduler like the
+> agent in **Part D**.
 
 ---
 
@@ -185,11 +193,13 @@ Register-ScheduledTask -TaskName "TopologyAgent" -Action $action -Trigger $trigg
 By default any machine that can reach the server may push. To require a shared
 secret:
 
-**On the server**, set the token before starting `topology_server.py`:
-```powershell
-$env:TOPO_TOKEN = "pick-a-long-secret"
-python renderers\html\topology_server.py
+**On the server**, set the token in the service. Uncomment/edit the
+`Environment=TOPO_TOKEN=…` line in `/etc/systemd/system/topology-server.service`,
+then:
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart topology-server
 ```
+(Windows: `$env:TOPO_TOKEN = "pick-a-long-secret"` before `.\server.ps1`.)
 
 **On each reporting machine**, provide the same token:
 ```bash
@@ -214,11 +224,13 @@ one-shot push was done).
 ```bash
 curl http://192.168.1.225:8770/api/list      # should return JSON
 ```
-If it hangs/refuses: the server isn't running, or the firewall rule (Part A.3)
-is missing, or the IP is wrong.
+If it hangs/refuses: the service isn't running
+(`sudo systemctl status topology-server`), the firewall port (Part A.4) is
+closed, or the IP is wrong.
 
-**HUD stuck at zeros on the server itself?** You're likely viewing an old
-`topology_server.py`. Stop it (Ctrl-C) and restart, then hard-reload the page (Ctrl-F5).
+**HUD stuck at zeros on the server itself?** You're likely viewing an old build.
+`sudo systemctl restart topology-server` (or on Windows, Ctrl-C + rerun), then
+hard-reload the page (Ctrl-F5).
 
 **Linux map missing devices?** Install the collectors:
 `apt-get install pciutils util-linux dmidecode`. Per-DIMM RAM detail needs
@@ -242,13 +254,14 @@ Add `--report` (what `report.sh`/`report.ps1` do) to also stream live telemetry.
 
 | Machine | Runs | Command |
 |---|---|---|
-| **Server** (192.168.1.225) | dashboard + store | `python renderers\html\topology_server.py` |
+| **Server** (Linux, 192.168.1.225) | dashboard + store | `topology-server` systemd service |
 | **Reporting (Linux)** | agent (push) | `./report.sh` |
 | **Reporting (Windows)** | agent (push) | `.\report.ps1` |
 
 | File | Purpose |
 |---|---|
-| `server.ps1` | start the dashboard (firewall + topology_server.py) on Windows |
+| `systemd/topology-server.service` | run the dashboard as a persistent Linux service |
+| `server.ps1` | start the dashboard on Windows (firewall + topology_server.py) |
 | `renderers/html/topology_server.py` | dashboard server + ingest/telemetry API |
 | `renderers/html/index.html` | the dashboard UI |
 | `make_pc_topology.py` | Windows hardware scan |
