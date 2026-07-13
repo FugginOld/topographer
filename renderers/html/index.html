@@ -330,8 +330,8 @@ function drawLink(world,p,c,cls,load,label){
   world.appendChild(el('path',{d,fill:'none',stroke:COL.line,'stroke-width':1.2}));
   world.appendChild(el('path',{d,fill:'none',stroke:CLS[cls]||CLS.gen3,'stroke-width':1+load*2.6,
     'stroke-dasharray':'3 11','stroke-dashoffset':c.dash||0,'stroke-linecap':'round',opacity:0.3+load*0.55,filter:'url(#g)'}));
-  if(label){ const lx=(p.x+c.x)/2, ly=(p.y+c.y)/2-4;
-    const t=el('text',{x:lx,y:ly,'font-size':7.5,fill:CLS[cls]||COL.hud,'text-anchor':'middle',opacity:.75,'letter-spacing':'.04em'},label);
+  if(label){ const ly=(p.y+c.y)/2-4;                 // midx = the link's real horizontal midpoint
+    const t=el('text',{x:midx,y:ly,'font-size':7.5,fill:CLS[cls]||COL.hud,'text-anchor':'middle',opacity:.75,'letter-spacing':'.04em'},label);
     world.appendChild(t); }
 }
 function card(world,n,big){
