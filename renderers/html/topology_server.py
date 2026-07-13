@@ -259,9 +259,21 @@ def _network_cards(d: dict) -> list[dict]:
                     break
             except ValueError:
                 pass
-        cards.append({"id": n.get("id") or ip, "parent": parent,
-                      "label": n.get("name") or ip, "sub": n.get("ip") or "",
-                      "cls": cls, "kind": n.get("kind", "host"), "meta": _node_meta(n)})
+        card = {"id": n.get("id") or ip, "parent": parent,
+                "label": n.get("name") or ip, "sub": n.get("ip") or "",
+                "cls": cls, "kind": n.get("kind", "host"), "meta": _node_meta(n)}
+        if n.get("host"):
+            card["_host"] = n["host"]     # nest under its host below (proxmox VM / docker container)
+        cards.append(card)
+
+    # nest guests under their host node, matched by hostname (proxmox/docker)
+    by_label = {}
+    for c in cards:
+        by_label.setdefault((c.get("label") or "").lower(), c["id"])
+    for c in cards:
+        h = c.pop("_host", None)
+        if h and by_label.get(h.lower()) and by_label[h.lower()] != c["id"]:
+            c["parent"] = by_label[h.lower()]
     return cards
 
 

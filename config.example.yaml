@@ -63,6 +63,15 @@ unifi_snmp:
   switches:
     - {host: 10.0.10.2, community: public, version: 2c, name: core-sw01}
 
+# proxmox: enumerate VMs + LXC containers from the PVE API (the network can't see
+# guests behind NAT/internal bridges). They nest under the Proxmox host.
+proxmox:
+  enabled: false
+  url: https://10.0.30.20:8006
+  token: "topology@pam!ro=CHANGEME"   # Datacenter > Permissions > API Tokens (PVEAuditor)
+  verify_tls: false
+  # node: pve                         # optional; auto-discovered otherwise
+
 # remote_scan: lets the dashboard right-click a Linux host in the network map and
 # build its hardware topology over SSH (needs key-based SSH + python3 on the host).
 # If off, right-click still opens an existing report or shows the agent command.

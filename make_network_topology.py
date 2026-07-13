@@ -22,6 +22,7 @@ from renderers import mermaid, static_svg
 from collectors.arpscan import ArpScanCollector
 from collectors.pingsweep import PingSweepCollector
 from collectors.opnsense import OPNsenseCollector
+from collectors.proxmox import ProxmoxCollector
 from collectors.unifi import UnifiCollector
 from collectors.unifi_snmp import UnifiSnmpCollector
 from collectors.tailscale import TailscaleCollector
@@ -34,6 +35,7 @@ COLLECTORS = {
     "arpscan": ArpScanCollector,
     "pingsweep": PingSweepCollector,   # no-deps discovery (Windows-friendly)
     "unifi_snmp": UnifiSnmpCollector,
+    "proxmox": ProxmoxCollector,       # PVE API: VMs + LXC the network can't see
     "tailscale": TailscaleCollector,
     "docker": DockerCollector,
     "dns": DnsCollector,
