@@ -157,16 +157,21 @@ systemctl enable --now topology-agent
 journalctl -u topology-agent -f
 ```
 
-### Windows — Task Scheduler
+### Windows — scheduled task
 
-Create a task that runs at logon:
+From the repo, run once in PowerShell:
 
 ```powershell
-$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
-  -Argument "-WindowStyle Hidden -File `"$PWD\agent\report.ps1`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-Register-ScheduledTask -TaskName "TopologyAgent" -Action $action -Trigger $trigger
+.\agent\report.ps1 -Install -Server http://<dashboard-ip>:8770
 ```
+
+That registers a hidden scheduled task that reports at every logon (and restarts
+if it dies), then starts it immediately. Remove it with `.\agent\report.ps1 -Uninstall`.
+
+> Runs at **logon** — fine for a desktop you sign into. For an always-on /
+> headless box that should report before anyone logs in, open Task Scheduler and
+> change the **TopologyAgent** task's trigger to **At startup** with "Run whether
+> user is logged on or not."
 
 ---
 
