@@ -116,23 +116,31 @@ Machines with already-unique hostnames need no name.
 
 ## Part C — Add a Windows reporting machine
 
-1. **Install Python 3** (tick "Add to PATH") and **Git**.
+### Fastest: one-line bootstrap (PowerShell)
 
-2. **Clone and run:**
-   ```powershell
-   git clone https://github.com/FugginOld/topologygenerator.git
-   cd topologygenerator
-   .\agent\report.ps1 -Server http://<dashboard-ip>:8770                     # name = hostname
-   .\agent\report.ps1 -Server http://<dashboard-ip>:8770 -Name workstation-1 # custom card name
-   ```
+In PowerShell (no admin needed). Fetches the repo (downloads a zip if git isn't
+installed), ensures Python, and installs a persistent scheduled task that reports
+at every logon — the Windows counterpart of Part B's one-liner:
 
-   If PowerShell blocks the script, allow local scripts once:
-   ```powershell
-   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-   ```
+```powershell
+$env:TOPO_SERVER="http://<dashboard-ip>:8770"; irm https://raw.githubusercontent.com/FugginOld/topologygenerator/main/bootstrap.ps1 | iex
+```
 
-The server URL is required (`-Server` or `$env:TOPO_SERVER`) — `./install.sh`
-printed it. Leave it running; see **Part D** to make it persistent.
+- **Name the card:** set `$env:TOPO_NAME="my-pc"` before the one-liner (defaults to hostname).
+- **No Python?** It installs it via `winget`, then asks you to reopen PowerShell and re-run.
+- **Remove later:** `.\agent\report.ps1 -Uninstall` (from the install dir, default `%LocalAppData%\topologygenerator`).
+
+### Manual
+
+```powershell
+git clone https://github.com/FugginOld/topologygenerator.git
+cd topologygenerator
+.\agent\report.ps1 -Server http://<dashboard-ip>:8770            # run once (name = hostname)
+.\agent\report.ps1 -Install -Server http://<dashboard-ip>:8770   # persist (scheduled task, see Part D)
+```
+
+The server URL is required (`-Server` or `$env:TOPO_SERVER`). If PowerShell blocks
+the script, allow local scripts once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 ---
 

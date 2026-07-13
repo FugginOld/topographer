@@ -134,8 +134,9 @@ agent/topology_agent.py        push topology + telemetry to the server
 install.sh · uninstall.sh  set up / remove the dashboard as a Linux service
 agent/report.sh · agent/report.ps1   run the agent (self-updating)
 server/server.ps1        start the dashboard on Windows (firewall + topology_server.py)
-bootstrap.sh             agent one-liner install: systemd / Unraid go-script /
+bootstrap.sh             agent one-liner install (Linux/Unraid): systemd / go-script /
                          TOPO_ONCE snapshot — adapts to the host, git-free
+bootstrap.ps1            agent one-liner install (Windows): scheduled task, zip-fetch
 ```
 
 ## Tests
