@@ -90,16 +90,18 @@ for i in \$(seq 1 60); do [ -d "\$(dirname "\$DIR")" ] && break; sleep 5; done  
 if [ ! -f "\$DIR/agent/report.sh" ]; then          # re-fetch if appdata was wiped (git-free)
   mkdir -p "\$DIR"; curl -fsSL "\$TARURL" | tar xz -C "\$DIR" --strip-components=1
 fi
-exec "\$DIR/agent/report.sh" "\$SERVER"
+exec bash "\$DIR/agent/report.sh" "\$SERVER"
 EOF
-  chmod +x "$LAUNCHER"
+  chmod +x "$LAUNCHER" 2>/dev/null || true   # no-op on FAT; we invoke it via bash anyway
   GO=/boot/config/go
   MARK="# topology-agent (bootstrap)"
-  if ! grep -qF "$MARK" "$GO" 2>/dev/null; then
-    printf '\n%s\n%s\n' "$MARK" "$LAUNCHER >/var/log/topology-agent.log 2>&1 &" >> "$GO"
-  fi
+  # /boot is FAT — it can't hold the +x bit, so the launcher must be run via
+  # `bash`, not executed directly. Refresh the hook so a re-run replaces a stale
+  # line instead of skipping it (the grep guard would otherwise keep the old one).
+  [ -f "$GO" ] && grep -qF "$MARK" "$GO" && sed -i "\\|$MARK|,+1d" "$GO"
+  printf '\n%s\n%s\n' "$MARK" "bash $LAUNCHER >/var/log/topology-agent.log 2>&1 &" >> "$GO"
   pkill -f "report.sh $SERVER" 2>/dev/null || true          # stop any previous run
-  nohup "$LAUNCHER" >/var/log/topology-agent.log 2>&1 &      # start now
+  nohup bash "$LAUNCHER" >/var/log/topology-agent.log 2>&1 &  # start now (FAT-safe)
   echo
   echo "✓ topology-agent installed for Unraid (starts on boot via /boot/config/go)."
   echo "  launcher: $LAUNCHER   (clones/runs from $DIR)"
