@@ -32,6 +32,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+from renderers.card import Card   # the dashboard card contract (repo always present for the PC scan)
+
 PS = r"""
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 Write-Output ('CPU|' + $cpu.Name.Trim() + '|' + $cpu.NumberOfCores + '|' + $cpu.NumberOfLogicalProcessors)
@@ -321,7 +323,11 @@ def build(lines: list[str]) -> list[dict]:
         add({"label": mon or "Display", "sub": "monitor", "cls": "gen4",
              "parent": gpu_id, "kind": "leaf", "cap": 6, "grp": "display", "link": "video"})
 
-    return out
+    # every emitted node conforms to the Card contract (renderers/card.py).
+    # ponytail: boundary-pass — the call sites above still build dicts; convert
+    # them to explicit Card(...) constructors opportunistically when they change.
+    return [Card(**{k: v for k, v in n.items() if k in Card.__dataclass_fields__}).to_dict()
+            for n in out]
 
 
 def main() -> None:

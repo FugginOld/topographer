@@ -493,6 +493,9 @@ def build() -> list[dict]:
                  "cls": "gen3", "sub": (u["manuf"] or "USB") + (f" · {spd}Mb" if spd else ""),
                  "meta": umeta})
 
+    # ponytail: emits the Card contract (renderers/card.py) inline, NOT via import.
+    # topology_server.scan_host pipes THIS FILE ALONE over SSH to hosts without the
+    # repo, so it must stay single-file self-contained. Keep it in sync with Card.
     return out
 
 
