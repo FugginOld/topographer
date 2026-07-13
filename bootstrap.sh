@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-shot provision for a FRESH Debian/Ubuntu reporting machine: install deps,
-# clone the repo, and install a background systemd service that reports to the
-# dashboard server (no terminal left occupied; survives logout + reboot).
+# One-shot provision for a FRESH reporting machine: install deps, clone the repo,
+# and set up background reporting to the dashboard server (no terminal occupied,
+# survives reboot). Uses systemd where present, the boot 'go' script on Unraid.
 #
 #   curl -fsSL https://raw.githubusercontent.com/FugginOld/topologygenerator/main/bootstrap.sh | bash
 #   # or, to point at a different server / dir:
@@ -11,8 +11,17 @@
 set -euo pipefail
 
 REPO="${TOPO_REPO:-https://github.com/FugginOld/topologygenerator.git}"
-DIR="${TOPO_DIR:-$HOME/topologygenerator}"
 SERVER="${TOPO_SERVER:-http://192.168.1.225:8770}"
+
+# Unraid runs its OS from RAM, so anything under / is wiped on reboot — clone to
+# the array (appdata) instead, and persist via the boot 'go' script (no systemd).
+IS_UNRAID=false
+[ -f /etc/unraid-version ] && IS_UNRAID=true
+if [ "$IS_UNRAID" = true ] && [ -z "${TOPO_DIR:-}" ]; then
+  if [ -d /mnt/user ]; then DIR=/mnt/user/appdata/topologygenerator
+  else DIR=/boot/config/topologygenerator; fi   # array not up: fall back to flash
+fi
+DIR="${TOPO_DIR:-${DIR:-$HOME/topologygenerator}}"
 
 # Privilege: already root -> no sudo needed; otherwise use sudo if present.
 # CAN_ROOT is true when we can write system files (install pkgs + the unit).
@@ -55,6 +64,35 @@ chmod +x "$DIR/report.sh"
 if [ -n "${TOPO_ONCE:-}" ]; then
   echo "one-time snapshot -> pushing this machine's topology to $SERVER…"
   exec python3 "$DIR/topology_agent.py" --server "$SERVER"
+fi
+
+# Unraid: no systemd. Persist via a flash launcher + the boot 'go' script. The
+# launcher waits for the array (so appdata exists), re-clones if needed, and runs.
+if [ "$IS_UNRAID" = true ]; then
+  echo "installing Unraid persistence (flash launcher + go hook)…"
+  LAUNCHER=/boot/config/topology-agent.sh
+  cat > "$LAUNCHER" <<EOF
+#!/bin/bash
+# topology reporting agent launcher — persisted on the Unraid flash by bootstrap
+DIR="$DIR"; SERVER="$SERVER"; REPO="$REPO"
+for i in \$(seq 1 60); do [ -d "\$(dirname "\$DIR")" ] && break; sleep 5; done  # wait ~5m for array
+[ -d "\$DIR/.git" ] || git clone "\$REPO" "\$DIR"
+exec "\$DIR/report.sh" "\$SERVER"
+EOF
+  chmod +x "$LAUNCHER"
+  GO=/boot/config/go
+  MARK="# topology-agent (bootstrap)"
+  if ! grep -qF "$MARK" "$GO" 2>/dev/null; then
+    printf '\n%s\n%s\n' "$MARK" "$LAUNCHER >/var/log/topology-agent.log 2>&1 &" >> "$GO"
+  fi
+  pkill -f "report.sh $SERVER" 2>/dev/null || true          # stop any previous run
+  nohup "$LAUNCHER" >/var/log/topology-agent.log 2>&1 &      # start now
+  echo
+  echo "✓ topology-agent installed for Unraid (starts on boot via /boot/config/go)."
+  echo "  launcher: $LAUNCHER   (clones/runs from $DIR)"
+  echo "  log:      tail -f /var/log/topology-agent.log"
+  echo "  stop:     remove the '$MARK' lines from $GO, then: pkill -f topology_agent.py"
+  exit 0
 fi
 
 # Otherwise install a systemd service so reporting runs in the background
