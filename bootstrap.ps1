@@ -45,7 +45,8 @@ if (-not $py) {
 }
 
 # --- install the persistent scheduled task (report.ps1 -Install) ---
-$taskArgs = @("-Install", "-Server", $Server)
-if ($Name) { $taskArgs += @("-Name", $Name) }
-& (Join-Path $Dir "agent\report.ps1") @taskArgs
+# hashtable splat binds -Install/-Server by NAME (an array splat binds positionally)
+$p = @{ Install = $true; Server = $Server }
+if ($Name) { $p['Name'] = $Name }
+& (Join-Path $Dir "agent\report.ps1") @p
 Write-Host "installed from $Dir"
