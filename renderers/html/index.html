@@ -365,7 +365,7 @@ function renderGwDash(d){
   p.appendChild(statCard('Download',mbps(tp.rx_bps).toFixed(1),'Mbps'));
   p.appendChild(statCard('Upload',mbps(tp.tx_bps).toFixed(1),'Mbps'));
   const cc=statCard('Clients',cl.total!=null?cl.total:'—');
-  cc.appendChild(hel('div','du',(cl.wired||0)+' wired · '+(cl.wireless||0)+' wireless'+(cl.guest?' · '+cl.guest+' guest':'')));
+  cc.appendChild(hel('div','du',(cl.wired||0)+' wired · '+(cl.wireless||0)+' wireless'+(cl.guest?' · '+cl.guest+' guest':'')+(cl.iot?' · '+cl.iot+' iot':'')));
   p.appendChild(cc);
   const gc=hel('div','dcard'); gc.appendChild(hel('div','dl','Gateway')); gc.appendChild(hel('div','dv',gw.name||'—'));
   if(gw.model) gc.appendChild(drow('Model',gw.model));

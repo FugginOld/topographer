@@ -193,26 +193,40 @@ def _num(x) -> float:
         return 0.0
 
 
+def _gw_temp(dev: dict) -> float:
+    """Gateway temperature from the device's temperatures[] list (prefer a CPU probe)."""
+    temps = dev.get("temperatures") or []
+    for t in temps:
+        if t.get("type") == "cpu" or "cpu" in str(t.get("name", "")).lower():
+            return _num(t.get("value"))
+    return _num(temps[0].get("value")) if temps else 0.0
+
+
 def health_summary(health: list[dict], devices: list[dict], clients: list[dict]) -> dict:
     """Compact live gateway summary for the dashboard panel: WAN, throughput,
     clients, gateway + infra device health. Pure — unit-tested with sample data;
-    the collector feeds it the three live API lists (stat/health|device|sta)."""
-    wan, www = _subsys(health, "wan"), _subsys(health, "www")
-    gw = next((d for d in (devices or []) if d.get("type") in ("ugw", "udm", "uxg")), {})
-    sysstat = gw.get("system-stats") or {}
-    clients = clients or []
-    wired = sum(1 for c in clients if c.get("is_wired"))
-    guest = sum(1 for c in clients if c.get("is_guest"))
+    the collector feeds it the three live API lists (stat/health|device|sta).
+
+    Gateway CPU/mem/uptime/firmware live in the wan subsystem's gw_* fields (not
+    on stat/device), and the gateway device is matched by gw_mac since a UCG's
+    .type isn't the classic ugw/udm/uxg."""
+    wan, www, lan = _subsys(health, "wan"), _subsys(health, "www"), _subsys(health, "lan")
+    devices, clients = devices or [], clients or []
+    gw_mac = wan.get("gw_mac")
+    gwdev = (next((d for d in devices if d.get("mac") == gw_mac), {}) if gw_mac
+             else next((d for d in devices if d.get("type") in ("ugw", "udm", "uxg")), {}))
+    gss = wan.get("gw_system-stats") or gwdev.get("system-stats") or {}
     status = wan.get("status") or www.get("status")
+    wired = sum(1 for c in clients if c.get("is_wired"))
     return {
         "gateway": {
-            "name": gw.get("name") or gw.get("model") or wan.get("gw_name"),
-            "model": gw.get("model"),
-            "firmware": gw.get("displayable_version") or gw.get("version"),
-            "uptime": _fmt_uptime(gw.get("uptime") or wan.get("uptime")),
-            "cpu": _num(sysstat.get("cpu")),
-            "mem": _num(sysstat.get("mem")),
-            "temp": _num(gw.get("general_temperature")),
+            "name": wan.get("gw_name") or gwdev.get("name") or gwdev.get("model"),
+            "model": gwdev.get("model"),
+            "firmware": wan.get("gw_version") or gwdev.get("displayable_version") or gwdev.get("version"),
+            "uptime": _fmt_uptime(gss.get("uptime") or gwdev.get("uptime")),
+            "cpu": _num(gss.get("cpu")),
+            "mem": _num(gss.get("mem")),
+            "temp": _gw_temp(gwdev),
         },
         "wan": {
             "up": status == "ok",
@@ -220,20 +234,21 @@ def health_summary(health: list[dict], devices: list[dict], clients: list[dict])
             "ip": wan.get("wan_ip") or www.get("wan_ip"),
             "isp": wan.get("isp_name") or wan.get("gw_name"),
             "latency": round(_num(www.get("latency") or wan.get("latency"))),
-            "down_mbps": round(_num(www.get("xput_down") or wan.get("xput_down")), 1),
-            "up_mbps": round(_num(www.get("xput_up") or wan.get("xput_up")), 1),
+            "down_mbps": round(_num(www.get("xput_down")), 1),   # last speedtest (0 = idle)
+            "up_mbps": round(_num(www.get("xput_up")), 1),
         },
         "throughput": {
-            "rx_bps": _num(wan.get("rx_bytes-r")),   # download rate (WAN in)
-            "tx_bps": _num(wan.get("tx_bytes-r")),   # upload rate   (WAN out)
+            "rx_bps": _num(wan.get("rx_bytes-r")),   # live download rate (WAN in)
+            "tx_bps": _num(wan.get("tx_bytes-r")),   # live upload rate   (WAN out)
         },
         "clients": {
-            "total": len(clients),
+            "total": len(clients) or int(_num(wan.get("num_sta")) or _num(lan.get("num_user"))),
             "wired": wired,
             "wireless": len(clients) - wired,
-            "guest": guest,
+            "guest": sum(1 for c in clients if c.get("is_guest")) or int(_num(lan.get("num_guest"))),
+            "iot": int(_num(lan.get("num_iot"))),
         },
-        "devices": [
+        "devices": [   # infra beyond the gateway (switches/APs); the gateway has its own tile
             {
                 "name": d.get("name") or d.get("model") or d.get("mac"),
                 "kind": _DEV_KIND.get(d.get("type"), "device"),
@@ -241,7 +256,7 @@ def health_summary(health: list[dict], devices: list[dict], clients: list[dict])
                 "clients": d.get("num_sta"),
                 "uptime": _fmt_uptime(d.get("uptime")),
             }
-            for d in (devices or []) if d.get("mac")
+            for d in devices if d.get("mac") and d.get("mac") != gw_mac
         ],
     }
 
@@ -386,14 +401,21 @@ if __name__ == "__main__":  # ponytail: transform self-check, no live controller
     lk = client_links(cl)
     assert lk[0]["dst"] == "aa:bb:cc:00:00:01" and lk[0]["port"] == "7", lk
     hs = health_summary(
-        [{"subsystem": "wan", "status": "ok", "wan_ip": "47.1.2.3",
-          "rx_bytes-r": 1250000, "tx_bytes-r": 250000, "gw_name": "UCG"},
-         {"subsystem": "www", "status": "ok", "latency": 8, "xput_down": 930.5, "xput_up": 42.1}],
+        [{"subsystem": "wan", "status": "ok", "wan_ip": "47.1.2.3", "gw_mac": "aa:bb:cc:00:00:00",
+          "gw_name": "UCG", "gw_version": "5.1.19", "isp_name": "Acme ISP",
+          "gw_system-stats": {"cpu": "22.2", "mem": "72.2", "uptime": "90000"},
+          "rx_bytes-r": 1250000, "tx_bytes-r": 250000},
+         {"subsystem": "www", "status": "ok", "latency": 8, "xput_down": 930.5, "xput_up": 42.1},
+         {"subsystem": "lan", "num_user": 1, "num_guest": 0, "num_iot": 3}],
         devs, cl)
-    assert hs["wan"]["up"] and hs["wan"]["ip"] == "47.1.2.3", hs
+    assert hs["wan"]["up"] and hs["wan"]["ip"] == "47.1.2.3" and hs["wan"]["isp"] == "Acme ISP", hs
     assert hs["wan"]["down_mbps"] == 930.5 and hs["wan"]["latency"] == 8, hs
     assert hs["throughput"]["rx_bps"] == 1250000, hs
-    assert hs["clients"]["total"] == 1 and hs["clients"]["wired"] == 1, hs
-    assert hs["gateway"]["model"] == "UDMPRO" and hs["gateway"]["uptime"] == "1d 1h", hs
-    assert any(dv["kind"] == "firewall" for dv in hs["devices"]), hs
+    assert hs["clients"] == {"total": 1, "wired": 1, "wireless": 0, "guest": 0, "iot": 3}, hs
+    # gateway CPU/firmware come from the wan subsystem's gw_* fields; model from the matched device
+    assert hs["gateway"]["name"] == "UCG" and hs["gateway"]["cpu"] == 22.2, hs
+    assert hs["gateway"]["firmware"] == "5.1.19" and hs["gateway"]["model"] == "UDMPRO", hs
+    assert hs["gateway"]["uptime"] == "1d 1h", hs
+    # gateway (gw_mac) is excluded from the devices list; the switch remains
+    assert all(dv["name"] != "gw" for dv in hs["devices"]) and any(dv["kind"] == "switch" for dv in hs["devices"]), hs
     print("unifi transform self-check ok")
