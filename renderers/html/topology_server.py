@@ -133,6 +133,36 @@ def gateway_speedtest() -> dict:
         return {"error": str(e)}
 
 
+def host_services(host: str) -> dict:
+    """SSH into a Linux host and enumerate its containers / stacks / services for
+    the machine dashboard. Same SSH machinery + IP validation as scan_host."""
+    try:
+        host = str(ipaddress.ip_address(host))
+    except ValueError:
+        return {"error": "invalid host — must be an IP address"}
+    cfg = _remote_scan_cfg()
+    if not cfg.get("enabled"):
+        return {"error": "remote SSH scan is off (set remote_scan in config.yaml to enable it)"}
+    user = (cfg.get("hosts") or {}).get(host) or cfg.get("user")
+    if not user:
+        return {"error": f"no SSH user for {host} — set remote_scan.user or remote_scan.hosts['{host}']"}
+    opts = str(cfg.get("ssh_opts", "-o ConnectTimeout=8 -o BatchMode=yes")).split()
+    py = cfg.get("python", "python3")
+    script = os.path.join(ROOT, "scanners", "scan_services.py")
+    cmd = ["ssh", *opts, f"{user}@{host}", f"{shlex.quote(str(py))} -"]
+    try:
+        with open(script, encoding="utf-8") as fh:
+            r = subprocess.run(cmd, stdin=fh, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"error": f"ssh failed: {e}"}
+    if r.returncode != 0:
+        return {"error": (r.stderr or "ssh scan failed").strip()[-300:]}
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {"error": "probe returned no JSON (is python3 on the host?)"}
+
+
 def scan_host(host: str, name: str) -> dict:
     """SSH into a Linux host, run the hardware scanner over the pipe, ingest the
     result as a machine card. Raises with the agent fallback if SSH isn't set up."""
@@ -297,6 +327,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send(200, {**_tele.ZERO, "error": str(e)})
         if self.path.split("?")[0] == "/api/gwdash":
             return self._send(200, gateway_dashboard())
+        if self.path.split("?")[0] == "/api/services":
+            host = parse_qs(urlparse(self.path).query).get("host", [""])[0]
+            return self._send(200, host_services(host))
         if self.path.startswith("/t/"):
             tid = os.path.basename(self.path.split("?")[0])[:-5]  # strip .json
             try:

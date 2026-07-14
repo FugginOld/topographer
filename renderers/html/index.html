@@ -315,7 +315,17 @@ function setView(mode){
   document.getElementById('tabDash').classList.toggle('active',mode==='dashboard');
   if(mode!=='dashboard'){ clearInterval(dashTimer); dashTimer=null; }   // stop polling when hidden
 }
-function openDash(){ setView('dashboard'); loadGwDash(); clearInterval(dashTimer); dashTimer=setInterval(loadGwDash,5000); }
+function isNetwork(){ const t=TOPOS.find(x=>x.id===activeId); return (t&&t.kind==='network')||activeId==='network'; }
+function loadDash(){ return isNetwork()?loadGwDash():loadSvcDash(); }
+function openDash(){
+  setView('dashboard'); clearInterval(dashTimer); dashTimer=null;
+  const net=isNetwork();
+  document.getElementById('dashtitle').textContent=net?'GATEWAY DASHBOARD':'SERVICES & CONTAINERS';
+  document.getElementById('dashspeed').style.display=net?'':'none';   // gateway-only controls
+  document.getElementById('dashopen').style.display=net?'':'none';
+  loadDash();
+  if(net) dashTimer=setInterval(loadGwDash,5000);   // gateway API is cheap; the SSH probe is not (use REFRESH)
+}
 // DASHBOARD tab: ask before generating one the first time, then remember the opt-in per topology
 document.getElementById('tabDash').onclick=()=>{
   if(!activeId) return;
@@ -325,7 +335,7 @@ document.getElementById('tabDash').onclick=()=>{
   });
 };
 document.getElementById('tabTopo').onclick=()=>setView('topology');
-document.getElementById('dashrefresh').onclick=loadGwDash;
+document.getElementById('dashrefresh').onclick=loadDash;
 document.getElementById('dashopen').onclick=()=>{ const u=gatewayUrl(); if(u) window.open(u,'_blank','noopener'); else alert('No gateway address known for this topology.'); };
 document.getElementById('dashspeed').onclick=async()=>{
   const btn=document.getElementById('dashspeed'); btn.disabled=true;
@@ -419,6 +429,47 @@ function renderGwDash(d){
     });
     p.appendChild(dc);
   }
+}
+// machine dashboard: containers / compose stacks / running services, scanned over SSH
+async function loadSvcDash(){
+  const ip=(TOPOS.find(t=>t.id===activeId)||{}).ip;
+  if(!ip){ renderSvc({error:'this topology has no IP address to scan.'}); document.getElementById('dashupd').textContent=''; return; }
+  document.getElementById('dashupd').textContent='scanning '+ip+' over SSH…';
+  try{
+    const r=await fetch('api/services?host='+encodeURIComponent(ip)+'&_='+Date.now());
+    const d=await r.json();
+    renderSvc(d);
+    document.getElementById('dashupd').textContent=d.error?'':('updated '+new Date().toLocaleTimeString());
+  }catch(e){ renderSvc({error:'could not reach the dashboard API.'}); document.getElementById('dashupd').textContent=''; }
+}
+function svcRow(c){
+  const r=hel('div','drow');
+  r.appendChild(hel('span','dk',c.name+(c.image?' · '+c.image:'')));
+  const rv=hel('span',null,c.status||c.state||''); if(c.state&&c.state!=='running') rv.style.color='var(--crit)';
+  r.appendChild(rv); return r;
+}
+function renderSvc(d){
+  const p=document.getElementById('dashpanel'); p.innerHTML='';
+  if(d.error){ const e=hel('div','dcard wide'); e.appendChild(hel('div','dl','No dashboard')); e.appendChild(hel('div','du',d.error)); p.appendChild(e); return; }
+  const cons=d.containers||[], svcs=d.services||[];
+  if(!cons.length && !svcs.length){
+    const e=hel('div','dcard wide'); e.appendChild(hel('div','dl','Nothing found'));
+    e.appendChild(hel('div','du','No docker/podman containers or running services detected'+(d.engine?' ('+d.engine+')':'')+'.'));
+    p.appendChild(e); return;
+  }
+  const stacks={}, loose=[];
+  cons.forEach(c=>{ if(c.project){ (stacks[c.project]=stacks[c.project]||[]).push(c); } else loose.push(c); });
+  const running=cons.filter(c=>c.state==='running').length;
+  const sc=statCard('Containers',cons.length);
+  sc.appendChild(hel('div','du',running+' running · '+(cons.length-running)+' stopped'+(d.engine?' · '+d.engine:'')));
+  p.appendChild(sc);
+  Object.keys(stacks).sort().forEach(proj=>{
+    const card=hel('div','dcard wide'); card.appendChild(hel('div','dl','Stack · '+proj));
+    stacks[proj].forEach(c=>card.appendChild(svcRow(c)));
+    p.appendChild(card);
+  });
+  if(loose.length){ const card=hel('div','dcard wide'); card.appendChild(hel('div','dl','Containers')); loose.forEach(c=>card.appendChild(svcRow(c))); p.appendChild(card); }
+  if(svcs.length){ const card=hel('div','dcard wide'); card.appendChild(hel('div','dl','Running services ('+svcs.length+')')); card.appendChild(hel('div','du',svcs.join(' · '))); p.appendChild(card); }
 }
 // styled Yes/No confirm, reusing the notice card
 function confirmNotice(title,msg,onYes){
