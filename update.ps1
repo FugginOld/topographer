@@ -5,13 +5,13 @@
 # they're not in the zip and your data survives the update.
 #
 #   fresh install / update (no git needed):
-#     irm https://raw.githubusercontent.com/FugginOld/topologygenerator/main/update.ps1 | iex
+#     irm https://raw.githubusercontent.com/FugginOld/topographer/main/update.ps1 | iex
 #   set a dir / port / token first (optional):
 #     $env:TOPO_DIR="C:\topo"; $env:TOPO_PORT="9000"; $env:TOPO_TOKEN="secret"
 $ErrorActionPreference = "Stop"
 
-$Repo = if ($env:TOPO_REPO) { $env:TOPO_REPO } else { "https://github.com/FugginOld/topologygenerator" }
-$Dir  = if ($env:TOPO_DIR)  { $env:TOPO_DIR }  else { Join-Path $env:LOCALAPPDATA "topologygenerator" }
+$Repo = if ($env:TOPO_REPO) { $env:TOPO_REPO } else { "https://github.com/FugginOld/topographer" }
+$Dir  = if ($env:TOPO_DIR)  { $env:TOPO_DIR }  else { Join-Path $env:LOCALAPPDATA "topographer" }
 
 $zip = Join-Path $env:TEMP "topo-server.zip"
 $tmp = Join-Path $env:TEMP "topo-server-extract"
@@ -19,7 +19,7 @@ Write-Host "fetching latest server -> $Dir"
 Invoke-WebRequest "$Repo/archive/refs/heads/main.zip" -OutFile $zip -UseBasicParsing
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive $zip $tmp -Force
-$src = Join-Path $tmp "topologygenerator-main"
+$src = Join-Path $tmp "topographer-main"
 # drop the dev-only tree before copying (operational files only)
 Remove-Item (Join-Path $src "tests"), (Join-Path $src ".github") -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null

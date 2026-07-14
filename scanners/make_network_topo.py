@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Topology generator entrypoint.
 
-    python make_network_topology.py --config config.yaml
+    python make_network_topo.py --config config.yaml
 
 Pipeline: run enabled collectors (read-only) -> dump raw -> normalize into a
 canonical Topology -> enrich (vendor/kind/aging) -> render (json/mermaid/svg).
@@ -97,17 +97,17 @@ def main() -> None:
     topo = enrich(topo, cfg.get("offline_after_minutes", 30))
 
     # renders
-    json_path = os.path.join(args.outdir, "topology.json")
+    json_path = os.path.join(args.outdir, "topo.json")
     topo.dump(json_path)
-    mermaid.write(topo, os.path.join(args.outdir, "topology.mmd"))
+    mermaid.write(topo, os.path.join(args.outdir, "topo.mmd"))
     static_svg.write(
         topo,
         os.path.join(args.outdir, "topology.dot"),
-        os.path.join(args.outdir, "topology.svg"),
+        os.path.join(args.outdir, "topo.svg"),
     )
     log.info("wrote %s (%d nodes, %d links, %d zones)",
              json_path, len(topo.nodes), len(topo.links), len(topo.zones))
-    print(f"\n  topology.json ready -> serve it:  python renderers/html/topology_server.py")
+    print(f"\n  topo.json ready -> serve it:  python renderers/html/topo_server.py")
 
 
 def _dedupe_zones(zones: list[dict]) -> list[dict]:

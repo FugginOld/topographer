@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Enumerate this host's containers / compose stacks / running services, as JSON.
 
-Piped alone over SSH by the dashboard (exactly like make_linux_topology.py), so it
+Piped alone over SSH by the dashboard (exactly like make_linux_topo.py), so it
 must stay single-file self-contained — stdlib only, imports nothing from the repo.
 Uses the docker/podman CLI (no socket libs) and systemctl; degrades to empty lists.
 

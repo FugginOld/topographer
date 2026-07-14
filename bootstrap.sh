@@ -26,10 +26,10 @@ TARURL="${SERVER%/}/agent.tar.gz"
 IS_UNRAID=false
 [ -f /etc/unraid-version ] && IS_UNRAID=true
 if [ "$IS_UNRAID" = true ] && [ -z "${TOPO_DIR:-}" ]; then
-  if [ -d /mnt/user ]; then DIR=/mnt/user/appdata/topologygenerator
-  else DIR=/boot/config/topologygenerator; fi   # array not up: fall back to flash
+  if [ -d /mnt/user ]; then DIR=/mnt/user/appdata/topographer
+  else DIR=/boot/config/topographer; fi   # array not up: fall back to flash
 fi
-DIR="${TOPO_DIR:-${DIR:-$HOME/topologygenerator}}"
+DIR="${TOPO_DIR:-${DIR:-$HOME/topographer}}"
 
 # Privilege: already root -> no sudo needed; otherwise use sudo if present.
 # CAN_ROOT is true when we can write system files (install pkgs + the unit).
@@ -71,14 +71,14 @@ chmod +x "$DIR/agent/report.sh"
 # once and exit. No service, no lingering process.
 if [ -n "${TOPO_ONCE:-}" ]; then
   echo "one-time snapshot -> pushing this machine's topology to $SERVER…"
-  exec python3 "$DIR/agent/topology_agent.py" --server "$SERVER"
+  exec python3 "$DIR/agent/topo_agent.py" --server "$SERVER"
 fi
 
 # Unraid: no systemd. Persist via a flash launcher + the boot 'go' script. The
 # launcher waits for the array (so appdata exists), re-clones if needed, and runs.
 if [ "$IS_UNRAID" = true ]; then
   echo "installing Unraid persistence (flash launcher + go hook)…"
-  LAUNCHER=/boot/config/topology-agent.sh
+  LAUNCHER=/boot/config/topo-agent.sh
   cat > "$LAUNCHER" <<EOF
 #!/bin/bash
 # topology reporting agent launcher — persisted on the Unraid flash by bootstrap
@@ -91,19 +91,19 @@ exec bash "\$DIR/agent/report.sh" "\$SERVER"
 EOF
   chmod +x "$LAUNCHER" 2>/dev/null || true   # no-op on FAT; we invoke it via bash anyway
   GO=/boot/config/go
-  MARK="# topology-agent (bootstrap)"
+  MARK="# topo-agent (bootstrap)"
   # /boot is FAT — it can't hold the +x bit, so the launcher must be run via
   # `bash`, not executed directly. Refresh the hook so a re-run replaces a stale
   # line instead of skipping it (the grep guard would otherwise keep the old one).
   [ -f "$GO" ] && grep -qF "$MARK" "$GO" && sed -i "\\|$MARK|,+1d" "$GO"
-  printf '\n%s\n%s\n' "$MARK" "bash $LAUNCHER >/var/log/topology-agent.log 2>&1 &" >> "$GO"
+  printf '\n%s\n%s\n' "$MARK" "bash $LAUNCHER >/var/log/topo-agent.log 2>&1 &" >> "$GO"
   pkill -f "report.sh $SERVER" 2>/dev/null || true          # stop any previous run
-  nohup bash "$LAUNCHER" >/var/log/topology-agent.log 2>&1 &  # start now (FAT-safe)
+  nohup bash "$LAUNCHER" >/var/log/topo-agent.log 2>&1 &  # start now (FAT-safe)
   echo
-  echo "✓ topology-agent installed for Unraid (starts on boot via /boot/config/go)."
+  echo "✓ topo-agent installed for Unraid (starts on boot via /boot/config/go)."
   echo "  launcher: $LAUNCHER   (clones/runs from $DIR)"
-  echo "  log:      tail -f /var/log/topology-agent.log"
-  echo "  stop:     remove the '$MARK' lines from $GO, then: pkill -f topology_agent.py"
+  echo "  log:      tail -f /var/log/topo-agent.log"
+  echo "  stop:     remove the '$MARK' lines from $GO, then: pkill -f topo_agent.py"
   exit 0
 fi
 
@@ -111,10 +111,10 @@ fi
 # (survives logout + reboot) instead of occupying this terminal. Falls back to
 # foreground where systemd/root isn't available.
 if command -v systemctl >/dev/null 2>&1 && [ "$CAN_ROOT" = true ]; then
-  echo "installing systemd service 'topology-agent' (may prompt for sudo)…"
-  $SUDO tee /etc/systemd/system/topology-agent.service >/dev/null <<EOF
+  echo "installing systemd service 'topo-agent' (may prompt for sudo)…"
+  $SUDO tee /etc/systemd/system/topo-agent.service >/dev/null <<EOF
 [Unit]
-Description=Topology reporting agent (pushes hardware map + live telemetry)
+Description=Topographer reporting agent (pushes hardware map + live telemetry)
 After=network-online.target
 Wants=network-online.target
 
@@ -130,13 +130,13 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
   $SUDO systemctl daemon-reload
-  $SUDO systemctl enable topology-agent
-  $SUDO systemctl restart topology-agent   # restart so a re-run picks up config changes
+  $SUDO systemctl enable topo-agent
+  $SUDO systemctl restart topo-agent   # restart so a re-run picks up config changes
   echo
-  echo "✓ topology-agent is running as a service (starts on boot)."
-  echo "  status:  systemctl status topology-agent"
-  echo "  logs:    journalctl -u topology-agent -f"
-  echo "  stop:    $SUDO systemctl disable --now topology-agent"
+  echo "✓ topo-agent is running as a service (starts on boot)."
+  echo "  status:  systemctl status topo-agent"
+  echo "  logs:    journalctl -u topo-agent -f"
+  echo "  stop:    $SUDO systemctl disable --now topo-agent"
 else
   echo "no systemd/root — running in the foreground instead (Ctrl-C to stop):"
   exec "$DIR/agent/report.sh" "$SERVER"

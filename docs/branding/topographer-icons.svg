@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1224" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace">
+  <defs>
+    <style>
+      :root{}
+      .bg{fill:#13171A}
+      .panel{fill:#1A2024}
+      .line{stroke:#2B333A}
+      .amber{stroke:#E3A63A}
+      .amberf{fill:#E3A63A}
+      .cyan{stroke:#4CC6C6}
+      .cyanf{fill:#4CC6C6}
+      .txt{fill:#CBD3D7}
+      .mut{fill:#7A868D}
+      .paper{fill:#E7E2D5}
+      text{fill:#CBD3D7}
+      .ey{fill:#7A868D;font-size:11px;letter-spacing:2px}
+      .nm{fill:#E3A63A;font-size:15px;font-weight:700;letter-spacing:.5px}
+      .rat{fill:#93A0A6;font-size:11.5px}
+      .px{fill:#67737A;font-size:9.5px;letter-spacing:1px}
+    </style>
+
+    <!-- one organic contour loop, r~50 about origin -->
+    <path id="blob" d="M0,-50 C26,-49 49,-27 48,2 C47,29 25,49 -3,48 C-31,47 -49,26 -48,-4 C-47,-31 -27,-50 0,-50 Z"/>
+
+    <!-- ===== ICON 1 · contour-ring node ===== -->
+    <symbol id="ic1" viewBox="-60 -60 120 120">
+      <use href="#blob" fill="none" class="amber" stroke-width="5"/>
+      <use href="#blob" transform="translate(5,3) scale(0.62)" fill="none" class="amber" stroke-width="8"/>
+      <use href="#blob" transform="translate(9,6) scale(0.30)" fill="none" class="amber" stroke-width="16"/>
+      <circle cx="9" cy="6" r="7.5" class="cyanf"/>
+    </symbol>
+
+    <!-- ===== ICON 2 · peaks-as-nodes ===== -->
+    <symbol id="ic2" viewBox="-60 -60 120 120">
+      <use href="#blob" transform="translate(-20,10) scale(0.52)" fill="none" class="amber" stroke-width="9"/>
+      <use href="#blob" transform="translate(-18,7) scale(0.28)" fill="none" class="amber" stroke-width="16"/>
+      <use href="#blob" transform="translate(24,16) scale(0.44)" fill="none" class="amber" stroke-width="10"/>
+      <use href="#blob" transform="translate(25,13) scale(0.23)" fill="none" class="amber" stroke-width="18"/>
+      <line x1="-20" y1="-17" x2="24" y2="-6" class="cyan" stroke-width="3.5"/>
+      <circle cx="-20" cy="-17" r="7" class="cyanf"/>
+      <circle cx="24" cy="-6" r="6" class="cyanf"/>
+    </symbol>
+
+    <!-- ===== ICON 3 · triangulation benchmark ===== -->
+    <symbol id="ic3" viewBox="-60 -60 120 120">
+      <circle cx="0" cy="0" r="47" fill="none" class="amber" stroke-width="5"/>
+      <path d="M0,-40 L34.6,20 L-34.6,20 Z" fill="none" class="amber" stroke-width="5"/>
+      <circle cx="0" cy="0" r="5.5" class="cyanf"/>
+      <circle cx="0" cy="-40" r="7.5" class="cyanf"/>
+      <circle cx="34.6" cy="20" r="7.5" class="cyanf"/>
+      <circle cx="-34.6" cy="20" r="7.5" class="cyanf"/>
+    </symbol>
+
+    <!-- ===== ICON 4 · contour "T" monogram ===== -->
+    <clipPath id="tclip"><path d="M-42,-42 H42 V-18 H13 V44 H-13 V-18 H-42 Z"/></clipPath>
+    <symbol id="ic4" viewBox="-60 -60 120 120">
+      <g clip-path="url(#tclip)">
+        <rect x="-60" y="-60" width="120" height="120" fill="#1A2024"/>
+        <path d="M-58,-35 C-25,-40 25,-31 58,-36" fill="none" class="amber" stroke-width="5.5"/>
+        <path d="M-58,-24 C-28,-20 28,-29 58,-24" fill="none" class="amber" stroke-width="5.5"/>
+        <path d="M-58,-6 C-30,-11 30,-2 58,-8" fill="none" class="amber" stroke-width="5.5"/>
+        <path d="M-58,8 C-30,4 30,13 58,7" fill="none" class="amber" stroke-width="5.5"/>
+        <path d="M-58,22 C-30,27 30,18 58,23" fill="none" class="amber" stroke-width="5.5"/>
+        <path d="M-58,37 C-30,33 30,42 58,37" fill="none" class="amber" stroke-width="5.5"/>
+      </g>
+      <path d="M-42,-42 H42 V-18 H13 V44 H-13 V-18 H-42 Z" fill="none" class="amber" stroke-width="2" opacity="0.55"/>
+      <circle cx="0" cy="-30" r="4.5" class="cyanf"/>
+    </symbol>
+
+    <!-- ===== ICON 5 · sweep over contours ===== -->
+    <symbol id="ic5" viewBox="-60 -60 120 120">
+      <linearGradient id="swp" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#4CC6C6" stop-opacity="0.55"/>
+        <stop offset="1" stop-color="#4CC6C6" stop-opacity="0"/>
+      </linearGradient>
+      <use href="#blob" fill="none" class="amber" stroke-width="5"/>
+      <use href="#blob" transform="translate(5,3) scale(0.62)" fill="none" class="amber" stroke-width="8"/>
+      <use href="#blob" transform="translate(9,6) scale(0.30)" fill="none" class="amber" stroke-width="16"/>
+      <path d="M5,3 L54,-38 A63,63 0 0 1 60,6 Z" fill="url(#swp)"/>
+      <line x1="5" y1="3" x2="54" y2="-38" class="cyan" stroke-width="2.5"/>
+      <circle cx="9" cy="6" r="6.5" class="cyanf"/>
+      <circle cx="-38" cy="-16" r="5" class="cyanf" opacity="0.9"/>
+      <circle cx="30" cy="40" r="4.5" class="cyanf" opacity="0.55"/>
+    </symbol>
+  </defs>
+
+  <!-- sheet -->
+  <rect class="bg" x="0" y="0" width="1200" height="1224"/>
+
+  <!-- faint contour signature, top-right -->
+  <g opacity="0.05">
+    <use href="#blob" transform="translate(1090,70) scale(2.6)" fill="none" class="amber" stroke-width="2"/>
+    <use href="#blob" transform="translate(1110,90) scale(1.7)" fill="none" class="amber" stroke-width="2"/>
+    <use href="#blob" transform="translate(1128,104) scale(0.9)" fill="none" class="amber" stroke-width="3"/>
+  </g>
+
+  <!-- header -->
+  <text x="44" y="78" font-family="system-ui, sans-serif" font-size="46" font-weight="700" letter-spacing="-1"><tspan class="amberf">Topo</tspan><tspan class="txt">grapher</tspan></text>
+  <text x="46" y="104" class="rat" font-size="12">icon exploration sheet · homelab topology, surveyed live</text>
+
+  <!-- palette chips -->
+  <g transform="translate(44,128)">
+    <rect x="0" y="0" width="16" height="16" rx="3" fill="#13171A" class="line"/><text x="22" y="12" class="px">#13171A slate</text>
+    <rect x="150" y="0" width="16" height="16" rx="3" fill="#E3A63A"/><text x="172" y="12" class="px">#E3A63A contour</text>
+    <rect x="315" y="0" width="16" height="16" rx="3" fill="#4CC6C6"/><text x="337" y="12" class="px">#4CC6C6 live-node</text>
+    <rect x="490" y="0" width="16" height="16" rx="3" fill="#E7E2D5"/><text x="512" y="12" class="px">#E7E2D5 map-paper</text>
+  </g>
+  <text x="1156" y="78" text-anchor="end" class="mut" font-size="12">fugginold/topographer</text>
+  <line x1="44" y1="160" x2="1156" y2="160" class="line" stroke-width="1"/>
+
+  <!-- ================= CARD MACRO (manual) ================= -->
+  <!-- Row0 Left · ic1 -->
+  <g transform="translate(44,180)">
+    <rect class="panel" x="0" y="0" width="544" height="312" rx="10" stroke="#2B333A" stroke-width="1"/>
+    <text x="26" y="38" class="ey">01</text>
+    <text x="52" y="38" class="nm">CONTOUR-RING NODE</text>
+    <text x="26" y="62" class="rat">Nested elevation contours around a single live node.</text>
+    <text x="26" y="80" class="rat">Reads as map + node at once. The safe favicon pick.</text>
+    <use href="#ic1" x="24" y="120" width="150" height="150"/>
+    <!-- scale strip -->
+    <text x="212" y="150" class="px">SCALES →</text>
+    <use href="#ic1" x="212" y="160" width="56" height="56"/><text x="240" y="232" text-anchor="middle" class="px">48</text>
+    <use href="#ic1" x="292" y="176" width="40" height="40"/><text x="312" y="232" text-anchor="middle" class="px">28</text>
+    <use href="#ic1" x="356" y="188" width="26" height="26"/><text x="369" y="232" text-anchor="middle" class="px">16</text>
+    <rect class="paper" x="418" y="158" width="60" height="60" rx="8"/><use href="#ic1" x="428" y="168" width="40" height="40"/><text x="448" y="232" text-anchor="middle" class="px">ON LIGHT</text>
+  </g>
+
+  <!-- Row0 Right · ic2 -->
+  <g transform="translate(612,180)">
+    <rect class="panel" x="0" y="0" width="544" height="312" rx="10" stroke="#2B333A" stroke-width="1"/>
+    <text x="26" y="38" class="ey">02</text>
+    <text x="52" y="38" class="nm">PEAKS-AS-NODES</text>
+    <text x="26" y="62" class="rat">Two mapped hosts (hills), each a node at its summit,</text>
+    <text x="26" y="80" class="rat">joined by an edge. Fuses terrain + network graph.</text>
+    <use href="#ic2" x="24" y="120" width="150" height="150"/>
+    <text x="212" y="150" class="px">SCALES →</text>
+    <use href="#ic2" x="212" y="160" width="56" height="56"/><text x="240" y="232" text-anchor="middle" class="px">48</text>
+    <use href="#ic2" x="292" y="176" width="40" height="40"/><text x="312" y="232" text-anchor="middle" class="px">28</text>
+    <use href="#ic2" x="356" y="188" width="26" height="26"/><text x="369" y="232" text-anchor="middle" class="px">16</text>
+    <rect class="paper" x="418" y="158" width="60" height="60" rx="8"/><use href="#ic2" x="428" y="168" width="40" height="40"/><text x="448" y="232" text-anchor="middle" class="px">ON LIGHT</text>
+  </g>
+
+  <!-- Row1 Left · ic3 -->
+  <g transform="translate(44,514)">
+    <rect class="panel" x="0" y="0" width="544" height="312" rx="10" stroke="#2B333A" stroke-width="1"/>
+    <text x="26" y="38" class="ey">03</text>
+    <text x="52" y="38" class="nm">TRIANGULATION MARK</text>
+    <text x="26" y="62" class="rat">Surveyor's benchmark. Nods to discovery + the</text>
+    <text x="26" y="80" class="rat">3-collector reconcile (one host, triangulated).</text>
+    <use href="#ic3" x="24" y="120" width="150" height="150"/>
+    <text x="212" y="150" class="px">SCALES →</text>
+    <use href="#ic3" x="212" y="160" width="56" height="56"/><text x="240" y="232" text-anchor="middle" class="px">48</text>
+    <use href="#ic3" x="292" y="176" width="40" height="40"/><text x="312" y="232" text-anchor="middle" class="px">28</text>
+    <use href="#ic3" x="356" y="188" width="26" height="26"/><text x="369" y="232" text-anchor="middle" class="px">16</text>
+    <rect class="paper" x="418" y="158" width="60" height="60" rx="8"/><use href="#ic3" x="428" y="168" width="40" height="40"/><text x="448" y="232" text-anchor="middle" class="px">ON LIGHT</text>
+  </g>
+
+  <!-- Row1 Right · ic4 -->
+  <g transform="translate(612,514)">
+    <rect class="panel" x="0" y="0" width="544" height="312" rx="10" stroke="#2B333A" stroke-width="1"/>
+    <text x="26" y="38" class="ey">04</text>
+    <text x="52" y="38" class="nm">CONTOUR "T" MONOGRAM</text>
+    <text x="26" y="62" class="rat">The T built from contour lines. Best for a favicon +</text>
+    <text x="26" y="80" class="rat">wordmark lockup; cheap as a one-color glyph.</text>
+    <use href="#ic4" x="24" y="120" width="150" height="150"/>
+    <text x="212" y="150" class="px">SCALES →</text>
+    <use href="#ic4" x="212" y="160" width="56" height="56"/><text x="240" y="232" text-anchor="middle" class="px">48</text>
+    <use href="#ic4" x="292" y="176" width="40" height="40"/><text x="312" y="232" text-anchor="middle" class="px">28</text>
+    <use href="#ic4" x="356" y="188" width="26" height="26"/><text x="369" y="232" text-anchor="middle" class="px">16</text>
+    <rect class="paper" x="418" y="158" width="60" height="60" rx="8"/><use href="#ic4" x="428" y="168" width="40" height="40"/><text x="448" y="232" text-anchor="middle" class="px">ON LIGHT</text>
+  </g>
+
+  <!-- Row2 Left · ic5 -->
+  <g transform="translate(44,848)">
+    <rect class="panel" x="0" y="0" width="544" height="312" rx="10" stroke="#2B333A" stroke-width="1"/>
+    <text x="26" y="38" class="ey">05</text>
+    <text x="52" y="38" class="nm">SWEEP OVER CONTOURS</text>
+    <text x="26" y="62" class="rat">Radar sweep lighting up nodes. The "live" one —</text>
+    <text x="26" y="80" class="rat">meant to animate as a dashboard splash / loader.</text>
+    <use href="#ic5" x="24" y="120" width="150" height="150"/>
+    <text x="212" y="150" class="px">SCALES →</text>
+    <use href="#ic5" x="212" y="160" width="56" height="56"/><text x="240" y="232" text-anchor="middle" class="px">48</text>
+    <use href="#ic5" x="292" y="176" width="40" height="40"/><text x="312" y="232" text-anchor="middle" class="px">28</text>
+    <use href="#ic5" x="356" y="188" width="26" height="26"/><text x="369" y="232" text-anchor="middle" class="px">16</text>
+    <rect class="paper" x="418" y="158" width="60" height="60" rx="8"/><use href="#ic5" x="428" y="168" width="40" height="40"/><text x="448" y="232" text-anchor="middle" class="px">ON LIGHT</text>
+  </g>
+
+  <!-- Row2 Right · LOCKUP -->
+  <g transform="translate(612,848)">
+    <rect class="panel" x="0" y="0" width="544" height="312" rx="10" stroke="#2B333A" stroke-width="1"/>
+    <text x="26" y="38" class="ey">LOCKUP · #01 IN USE</text>
+    <use href="#ic1" x="30" y="86" width="120" height="120"/>
+    <text x="172" y="150" font-family="system-ui, sans-serif" font-size="40" font-weight="700" letter-spacing="-1"><tspan class="amberf">Topo</tspan><tspan class="txt">grapher</tspan></text>
+    <text x="174" y="176" class="rat" font-size="12.5">homelab topology, surveyed live</text>
+    <line x1="30" y1="220" x2="514" y2="220" class="line" stroke-width="1"/>
+    <!-- horizontal + stacked favicon previews -->
+    <rect class="paper" x="30" y="238" width="44" height="44" rx="8"/><use href="#ic1" x="37" y="245" width="30" height="30"/>
+    <rect x="86" y="238" width="44" height="44" rx="8" fill="#13171A" class="line" stroke="#2B333A"/><use href="#ic1" x="93" y="245" width="30" height="30"/>
+    <text x="146" y="256" class="px">BROWSER TAB, LIGHT + DARK.</text>
+    <text x="146" y="272" class="px">MONO WORDMARK PAIRS W/ MONOSPACE UI.</text>
+  </g>
+</svg>

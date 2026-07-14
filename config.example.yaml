@@ -1,4 +1,4 @@
-# ── topologygenerator config ───────────────────────────────────────────────
+# ── topographer config ───────────────────────────────────────────────
 # Copy to config.yaml (which is gitignored) and fill in real values.
 # NEVER commit config.yaml — it holds API keys and your network layout.
 

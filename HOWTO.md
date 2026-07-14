@@ -3,14 +3,14 @@
 Map the real hardware of every machine on your network and watch them live from
 one dashboard.
 
-- **One dashboard server** (a Linux host on your LAN) runs `topology_server.py`
+- **One dashboard server** (a Linux host on your LAN) runs `topo_server.py`
   as a systemd service, stores every machine's topology, and shows the live HUD.
 - **Each reporting machine** runs a small **agent** that scans its own hardware
   and pushes its topology + live telemetry to the server.
 
 ```text
    Windows PC ─┐
-   Linux box  ─┼──►  http://<dashboard-ip>:8770   (topology_server.py service on the Linux host)
+   Linux box  ─┼──►  http://<dashboard-ip>:8770   (topo_server.py service on the Linux host)
    Proxmox    ─┘      dashboard lists every host, live HUD per host
 ```
 
@@ -27,11 +27,11 @@ sets up a systemd service, so it starts on boot and restarts if it dies.
 
 1. **Fetch + install (no git needed):**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/FugginOld/topologygenerator/main/update.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/FugginOld/topographer/main/update.sh | bash
    # to require a shared token from agents:
-   #   curl -fsSL https://raw.githubusercontent.com/FugginOld/topologygenerator/main/update.sh | TOPO_TOKEN=pick-a-secret bash   (see Part E)
+   #   curl -fsSL https://raw.githubusercontent.com/FugginOld/topographer/main/update.sh | TOPO_TOKEN=pick-a-secret bash   (see Part E)
    ```
-   `update.sh` downloads the latest source tarball to `~/topologygenerator` and
+   `update.sh` downloads the latest source tarball to `~/topographer` and
    runs `install.sh` for you. (Prefer git? `git clone … && ./install.sh` still
    works — the server just needs the files, not a clone.) It installs any missing
    deps, writes + enables the service (filling in your user and paths), opens the
@@ -47,7 +47,7 @@ sets up a systemd service, so it starts on boot and restarts if it dies.
 **Update:** `./update.sh` (or re-run the one-liner).  **Remove:** `./uninstall.sh`.
 
 > Prefer to keep the dashboard on **Windows**? Git-free install/update in one line
-> (PowerShell): `irm https://raw.githubusercontent.com/FugginOld/topologygenerator/main/update.ps1 | iex`
+> (PowerShell): `irm https://raw.githubusercontent.com/FugginOld/topographer/main/update.ps1 | iex`
 > — it fetches the operational files and starts the dashboard via `server.ps1` (opens
 > the firewall + runs the server). Set `$env:TOPO_PORT` / `$env:TOPO_TOKEN` first if
 > needed; make it persistent via Task Scheduler like the agent in **Part D**.
@@ -87,8 +87,8 @@ apt-get update
 apt-get install -y git python3 pciutils util-linux dmidecode
 
 # 2. get the repo
-git clone https://github.com/FugginOld/topologygenerator.git
-cd topologygenerator
+git clone https://github.com/FugginOld/topographer.git
+cd topographer
 
 # 3. start reporting (the server URL is required — ./install.sh printed it)
 ./agent/report.sh http://<dashboard-ip>:8770             # name = hostname
@@ -128,13 +128,13 @@ $env:TOPO_SERVER="http://<dashboard-ip>:8770"; irm http://<dashboard-ip>:8770/bo
 
 - **Name the card:** set `$env:TOPO_NAME="my-pc"` before the one-liner (defaults to hostname).
 - **No Python?** It installs it via `winget`, then asks you to reopen PowerShell and re-run.
-- **Remove later:** `.\agent\report.ps1 -Uninstall` (from the install dir, default `%LocalAppData%\topologygenerator`).
+- **Remove later:** `.\agent\report.ps1 -Uninstall` (from the install dir, default `%LocalAppData%\topographer`).
 
 ### Manual
 
 ```powershell
-git clone https://github.com/FugginOld/topologygenerator.git
-cd topologygenerator
+git clone https://github.com/FugginOld/topographer.git
+cd topographer
 .\agent\report.ps1 -Server http://<dashboard-ip>:8770            # run once (name = hostname)
 .\agent\report.ps1 -Install -Server http://<dashboard-ip>:8770   # persist (scheduled task, see Part D)
 ```
@@ -155,14 +155,14 @@ Bootstrap generates this unit for you; to do it by hand:
 
 ```bash
 # edit User= and the two paths to match your machine
-nano systemd/topology-agent.service
+nano systemd/topo-agent.service
 
-cp systemd/topology-agent.service /etc/systemd/system/
+cp systemd/topo-agent.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now topology-agent
+systemctl enable --now topo-agent
 
 # watch it
-journalctl -u topology-agent -f
+journalctl -u topo-agent -f
 ```
 
 ### Windows — scheduled task
@@ -189,10 +189,10 @@ By default any machine that can reach the server may push. To require a shared
 secret:
 
 **On the server**, set the token in the service. Uncomment/edit the
-`Environment=TOPO_TOKEN=…` line in `/etc/systemd/system/topology-server.service`,
+`Environment=TOPO_TOKEN=…` line in `/etc/systemd/system/topo-server.service`,
 then:
 ```bash
-sudo systemctl daemon-reload && sudo systemctl restart topology-server
+sudo systemctl daemon-reload && sudo systemctl restart topo-server
 ```
 (Windows: `$env:TOPO_TOKEN = "pick-a-long-secret"` before `.\server\server.ps1`.)
 
@@ -220,11 +220,11 @@ one-shot push was done).
 curl http://<dashboard-ip>:8770/api/list      # should return JSON
 ```
 If it hangs/refuses: the service isn't running
-(`sudo systemctl status topology-server`), the firewall port (Part A.4) is
+(`sudo systemctl status topo-server`), the firewall port (Part A.4) is
 closed, or the IP is wrong.
 
 **HUD stuck at zeros on the server itself?** You're likely viewing an old build.
-`sudo systemctl restart topology-server` (or on Windows, Ctrl-C + rerun), then
+`sudo systemctl restart topo-server` (or on Windows, Ctrl-C + rerun), then
 hard-reload the page (Ctrl-F5).
 
 **Linux map missing devices?** Install the collectors:
@@ -238,8 +238,8 @@ vendor/driver, so only `CPU %` shows there.
 
 **A one-shot push (topology only, no live telemetry):**
 ```bash
-python3 agent/topology_agent.py --server http://<dashboard-ip>:8770        # Linux
-python agent/topology_agent.py --server http://<dashboard-ip>:8770         # Windows
+python3 agent/topo_agent.py --server http://<dashboard-ip>:8770        # Linux
+python agent/topo_agent.py --server http://<dashboard-ip>:8770         # Windows
 ```
 Add `--report` (what `agent/report.sh`/`agent/report.ps1` do) to also stream live telemetry.
 
@@ -250,9 +250,9 @@ Add `--report` (what `agent/report.sh`/`agent/report.ps1` do) to also stream liv
 The tooling now lives in subfolders (`scanners/`, `agent/`, `server/`), so paths
 baked into old systemd units / launchers changed.
 
-- **Dashboard server:** unaffected — it runs `renderers/html/topology_server.py`
-  (unchanged). Just `~/topologygenerator/update.sh` (or, if you only edited files
-  locally, `sudo systemctl restart topology-server`).
+- **Dashboard server:** unaffected — it runs `renderers/html/topo_server.py`
+  (unchanged). Just `~/topographer/update.sh` (or, if you only edited files
+  locally, `sudo systemctl restart topo-server`).
 - **Reporting machines:** the old agent unit / Unraid `go` line pointed at
   `report.sh` at the repo root, now `agent/report.sh`. **Re-run the bootstrap
   one-liner** on each machine (it regenerates the unit with the new path):
@@ -267,24 +267,24 @@ baked into old systemd units / launchers changed.
 
 | Machine | Runs | Command |
 |---|---|---|
-| **Server** (Linux) | dashboard + store | `./install.sh` → `topology-server` service |
+| **Server** (Linux) | dashboard + store | `./install.sh` → `topo-server` service |
 | **Reporting (Linux)** | agent (push) | `./agent/report.sh` |
 | **Reporting (Windows)** | agent (push) | `.\agent\report.ps1` |
 
 | File | Purpose |
 |---|---|
 | `install.sh` / `uninstall.sh` | set up / remove the dashboard server as a Linux service |
-| `systemd/topology-server.service` | the dashboard service unit (install.sh writes it for you) |
-| `server/server.ps1` | start the dashboard on Windows (firewall + topology_server.py) |
-| `renderers/html/topology_server.py` | dashboard server + ingest/telemetry API |
+| `systemd/topo-server.service` | the dashboard service unit (install.sh writes it for you) |
+| `server/server.ps1` | start the dashboard on Windows (firewall + topo_server.py) |
+| `renderers/html/topo_server.py` | dashboard server + ingest/telemetry API |
 | `renderers/html/index.html` | the dashboard UI |
-| `scanners/make_pc_topology.py` | Windows hardware scan |
-| `scanners/make_linux_topology.py` | Linux hardware scan |
+| `scanners/make_pc_topo.py` | Windows hardware scan |
+| `scanners/make_linux_topo.py` | Linux hardware scan |
 | `core/local_telemetry.py` | live CPU/net/disk/temp sampler (both OSes) |
-| `agent/topology_agent.py` | push topology + telemetry to the server |
+| `agent/topo_agent.py` | push topology + telemetry to the server |
 | `agent/report.sh` / `agent/report.ps1` | run the agent (self-updating) |
 | `bootstrap.sh` | one-liner install — adapts to host (systemd / Unraid go / snapshot), git-free |
-| `systemd/topology-agent.service` | persistent Linux reporting (bootstrap installs this for you) |
+| `systemd/topo-agent.service` | persistent Linux reporting (bootstrap installs this for you) |
 
 **Server port:** `8770` (change with `--port`; the dashboard reads the same host
 it's served from, so no client config needed).

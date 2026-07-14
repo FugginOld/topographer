@@ -2,8 +2,8 @@
 config.yaml
 out/
 *.raw.json
-topology.json
-renderers/html/topology.json
+topo.json
+renderers/html/topo.json
 
 # python
 __pycache__/

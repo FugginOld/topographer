@@ -9,9 +9,9 @@ This serves renderers/html/ plus a tiny API over out/topologies/*.json:
     POST /api/generate {name} -> run the hardware scanner, save as a new topology
     POST /api/delete   {id}   -> remove a saved topology
 
-    python renderers/html/topology_server.py [--port 8770]
+    python renderers/html/topo_server.py [--port 8770]
 
-GENERATE runs scanners/make_pc_topology.py to map this PC's hardware fabric.
+GENERATE runs scanners/make_pc_topo.py to map this PC's hardware fabric.
 """
 from __future__ import annotations
 
@@ -40,9 +40,9 @@ INGEST_TOKEN = os.environ.get("TOPO_TOKEN", "")   # optional shared secret for /
 
 # The reporting agent's file set — served to fresh machines by bootstrap so they
 # fetch the client from THIS server, not github. Union of both OSes' needs: the
-# Windows scanner (make_pc_topology.py) pulls renderers/card.py; the Linux one is
+# Windows scanner (make_pc_topo.py) pulls renderers/card.py; the Linux one is
 # self-contained. Extra files on the other OS are a few harmless KB.
-AGENT_PATHS = ["agent", "scanners/make_linux_topology.py", "scanners/make_pc_topology.py",
+AGENT_PATHS = ["agent", "scanners/make_linux_topo.py", "scanners/make_pc_topo.py",
                "scanners/scan_services.py", "core/__init__.py", "core/local_telemetry.py",
                "renderers/__init__.py", "renderers/card.py"]
 
@@ -127,7 +127,7 @@ def list_rows() -> list[dict]:
 
 
 # pick the collector for whatever OS the dashboard is served from
-GENERATOR = "scanners/make_pc_topology.py" if sys.platform.startswith("win") else "scanners/make_linux_topology.py"
+GENERATOR = "scanners/make_pc_topo.py" if sys.platform.startswith("win") else "scanners/make_linux_topo.py"
 
 
 def _cfg_block(key: str) -> dict:
@@ -221,7 +221,7 @@ def scan_host(host: str, name: str) -> dict:
                            f"or remote_scan.hosts['{host}'] in config.yaml")
     opts = str(cfg.get("ssh_opts", "-o ConnectTimeout=8 -o BatchMode=yes")).split()
     py = cfg.get("python", "python3")
-    script = os.path.join(ROOT, "scanners", "make_linux_topology.py")
+    script = os.path.join(ROOT, "scanners", "make_linux_topo.py")
     # Only the validated IP and trusted-config values (user/py/opts) reach the
     # command. The user-supplied name is NOT passed to the remote shell — we
     # stamp it onto the result server-side after the scan returns.
@@ -272,10 +272,10 @@ def generate_network(subnet: str | None = None) -> dict:
             fh.write("offline_after_minutes: 30\npingsweep:\n  enabled: true\n"
                      f"  subnets: {subs}\n  resolve: true\n")
     r = subprocess.run(
-        [sys.executable, "scanners/make_network_topology.py", "--config", cfg_path, "--outdir", "out"],
+        [sys.executable, "scanners/make_network_topo.py", "--config", cfg_path, "--outdir", "out"],
         cwd=ROOT, capture_output=True, text=True,
     )
-    src = os.path.join(ROOT, "out", "topology.json")
+    src = os.path.join(ROOT, "out", "topo.json")
     if not os.path.exists(src):
         raise RuntimeError((r.stderr or r.stdout or "scan produced nothing").strip()[-800:])
     with open(src, encoding="utf-8") as fh:

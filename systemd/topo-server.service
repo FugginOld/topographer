@@ -1,19 +1,19 @@
 # Dashboard server (systemd) — serves the fleet dashboard + ingest/telemetry API
 # on :8770, and survives reboots. Edit User= and the two paths, then:
-#   sudo cp systemd/topology-server.service /etc/systemd/system/
+#   sudo cp systemd/topo-server.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now topology-server
-#   journalctl -u topology-server -f      # watch it
+#   sudo systemctl enable --now topo-server
+#   journalctl -u topo-server -f      # watch it
 [Unit]
-Description=Topology dashboard server (fleet dashboard + ingest/telemetry API)
+Description=Topographer dashboard server (fleet dashboard + ingest/telemetry API)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=YOUR_USER
-WorkingDirectory=/home/YOUR_USER/topologygenerator
-ExecStart=/usr/bin/python3 /home/YOUR_USER/topologygenerator/renderers/html/topology_server.py
+WorkingDirectory=/home/YOUR_USER/topographer
+ExecStart=/usr/bin/python3 /home/YOUR_USER/topographer/renderers/html/topo_server.py
 Restart=always
 RestartSec=10
 # Environment=TOPO_TOKEN=your-shared-secret   # require a token from reporting agents

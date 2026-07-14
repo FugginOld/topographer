@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <path id="b" d="M0,-50 C26,-49 49,-27 48,2 C47,29 25,49 -3,48 C-31,47 -49,26 -48,-4 C-47,-31 -27,-50 0,-50 Z"/>
+  </defs>
+  <use href="#b" transform="translate(256,256) scale(3.0)" fill="none" stroke="#E3A63A" stroke-width="4.7"/>
+  <use href="#b" transform="translate(270,265) scale(1.9)" fill="none" stroke="#E3A63A" stroke-width="7.6"/>
+  <use href="#b" transform="translate(281,273) scale(0.92)" fill="none" stroke="#E3A63A" stroke-width="16"/>
+  <circle cx="281" cy="273" r="23" fill="#4CC6C6"/>
+</svg>

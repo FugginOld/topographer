@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $Server = $env:TOPO_SERVER
 if (-not $Server) { Write-Error "set `$env:TOPO_SERVER=http://<dashboard-ip>:8770 first (the dashboard prints its URL on ./install.sh)"; return }
 $Name = $env:TOPO_NAME
-$Dir  = if ($env:TOPO_DIR) { $env:TOPO_DIR } else { Join-Path $env:LOCALAPPDATA "topologygenerator" }
+$Dir  = if ($env:TOPO_DIR) { $env:TOPO_DIR } else { Join-Path $env:LOCALAPPDATA "topographer" }
 
 # --- fetch the agent files from the dashboard server (not github) ---
 $zip = Join-Path $env:TEMP "topo-agent.zip"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Linux counterpart of make_pc_topology.py — same fabric schema, different sources.
+"""Linux counterpart of make_pc_topo.py — same fabric schema, different sources.
 
 Reads the real hardware topology from sysfs / proc / lspci / lsblk (no Windows,
 no PowerShell). The output is byte-for-byte the same shape the dashboard renders:
@@ -17,8 +17,8 @@ Sources (all readable without root except RAM detail):
     dmidecode -t memory               per-DIMM detail (needs root; falls back to
                                       /proc/meminfo total otherwise)
 
-    python make_linux_topology.py [--out out/topology_pc.json] [--name "my server"]
-    python make_linux_topology.py --selftest      # pure-logic checks, any OS
+    python make_linux_topo.py [--out out/topo_pc.json] [--name "my server"]
+    python make_linux_topo.py --selftest      # pure-logic checks, any OS
 
 # ponytail: untested on real hardware from this Windows box — the sysfs/lspci
 # interfaces are stable and well-documented, and --selftest covers the parsing.
@@ -542,7 +542,7 @@ def _selftest() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join("out", "topology_pc.json"))
+    ap.add_argument("--out", default=os.path.join("out", "topo_pc.json"))
     ap.add_argument("--name", default="linux server")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--stdout", action="store_true",
@@ -551,8 +551,8 @@ def main() -> None:
     if args.selftest:
         _selftest(); return
     if not sys.platform.startswith("linux"):
-        sys.exit("make_linux_topology.py reads Linux sysfs/proc — run it on the Linux host "
-                 "(use make_pc_topology.py on Windows).")
+        sys.exit("make_linux_topo.py reads Linux sysfs/proc — run it on the Linux host "
+                 "(use make_pc_topo.py on Windows).")
 
     nodes = build()
     topo = {"name": args.name,

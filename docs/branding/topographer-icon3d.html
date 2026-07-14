@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Topographer · icon 3D</title>
+<style>
+  :root{ --amber:#E3A63A; --cyan:#4CC6C6; --slate:#13171A; --mut:#7A868D; }
+  html,body{margin:0;height:100%;background:var(--slate);overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:#CBD3D7}
+  #c{display:block;width:100vw;height:100vh;touch-action:none}
+  .hud{position:fixed;left:20px;bottom:18px;pointer-events:none;user-select:none}
+  .hud h1{margin:0 0 3px;font-family:system-ui,sans-serif;font-size:19px;font-weight:700;letter-spacing:-.5px}
+  .hud h1 .a{color:var(--amber)} .hud h1 .b{color:#CBD3D7}
+  .hud p{margin:0;font-size:11px;color:var(--mut);letter-spacing:.5px}
+  .tag{position:fixed;right:20px;top:16px;font-size:10.5px;color:var(--mut);letter-spacing:2px;pointer-events:none}
+  .panel{position:fixed;left:20px;top:16px;user-select:none}
+  .pose{font-size:11px;color:var(--amber);letter-spacing:1px;margin-bottom:8px}
+  .hint{font-size:10px;color:var(--mut);letter-spacing:.5px;margin-bottom:10px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  button{font-family:inherit;font-size:11px;letter-spacing:.5px;color:#CBD3D7;background:#1A2024;
+    border:1px solid #2B333A;border-radius:7px;padding:7px 11px;cursor:pointer}
+  button:hover{border-color:var(--amber);color:var(--amber)}
+  button.k{padding:7px 9px}
+  #shot{position:fixed;inset:0;background:rgba(8,10,12,.92);display:none;z-index:9;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px}
+  #shot img{max-width:78vmin;max-height:78vmin;border-radius:12px;background:
+    repeating-conic-gradient(#20262b 0% 25%, #171c20 0% 50%) 50% / 22px 22px}
+  #shot .cap{font-size:11px;color:var(--mut);letter-spacing:1px;text-align:center;max-width:80vw}
+  #shot a{color:var(--amber);text-decoration:none;border:1px solid #2B333A;border-radius:7px;padding:8px 14px;font-size:12px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="tag">ICON 01 · 3D</div>
+
+<div class="panel">
+  <div id="pose" class="pose">az 0&deg; · el 0&deg; · zoom 430</div>
+  <div class="hint">drag or arrow keys to aim · +/&minus; zoom</div>
+  <div class="btns">
+    <button id="faceon">Face-on</button>
+    <button id="iso">3/4 view</button>
+    <button id="cap">Capture PNG</button>
+    <button id="capS">On slate</button>
+  </div>
+</div>
+
+<div class="hud">
+  <h1><span class="a">Topo</span><span class="b">grapher</span></h1>
+  <p>contour mark, in three dimensions</p>
+</div>
+
+<div id="shot" onclick="if(event.target.id==='shot')this.style.display='none'">
+  <img id="shotimg" alt="capture">
+  <a id="shotdl" download="topographer-icon-3d.png">Save image</a>
+  <div class="cap">right-click / long-press the image to save · tap backdrop to close</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true, preserveDrawingBuffer:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x13171A, 1);
+
+  const scene = new THREE.Scene();
+  const FOG = new THREE.Fog(0x13171A, 620, 1400);
+  scene.fog = FOG;
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 4000);
+
+  const AMBER = 0xE3A63A, CYAN = 0x4CC6C6;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(0,-50);
+  shape.bezierCurveTo(26,-49, 49,-27, 48,2);
+  shape.bezierCurveTo(47,29, 25,49, -3,48);
+  shape.bezierCurveTo(-31,47, -49,26, -48,-4);
+  shape.bezierCurveTo(-47,-31, -27,-50, 0,-50);
+  let base = shape.getPoints(64);
+  const f=base[0], l=base[base.length-1];
+  if(Math.abs(f.x-l.x)<1e-6 && Math.abs(f.y-l.y)<1e-6) base = base.slice(0,-1);
+
+  const rings = [
+    {scale:2.75, tx:256, ty:256, tube:7.0},
+    {scale:1.74, tx:269, ty:264, tube:7.2},
+    {scale:0.84, tx:279, ty:271, tube:7.35}
+  ];
+
+  const grp = new THREE.Group();
+  const amberMat = new THREE.MeshStandardMaterial({
+    color:AMBER, emissive:0x3a2a0e, emissiveIntensity:0.30, roughness:0.42, metalness:0.28
+  });
+  rings.forEach(function(r){
+    const pts = base.map(function(v){ return new THREE.Vector3(v.x*r.scale + r.tx, -(v.y*r.scale + r.ty), 0); });
+    const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.0);
+    grp.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 340, r.tube, 20, true), amberMat));
+  });
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(21, 64, 64),
+    new THREE.MeshStandardMaterial({color:CYAN, emissive:0x2FA9AC, emissiveIntensity:1.25, roughness:0.3, metalness:0.0})
+  );
+  core.position.set(279, -271, 0);
+  grp.add(core);
+  const coreLight = new THREE.PointLight(CYAN, 0.85, 340);
+  coreLight.position.copy(core.position);
+  grp.add(coreLight);
+
+  scene.add(grp);
+  const box = new THREE.Box3().setFromObject(grp);
+  const ctr = box.getCenter(new THREE.Vector3());
+  grp.position.sub(ctr);
+
+  scene.add(new THREE.HemisphereLight(0x3a4550, 0x0a0d0f, 0.5));
+  const key = new THREE.DirectionalLight(0xfff1d8, 1.15); key.position.set(-160, 200, 200); scene.add(key);
+  const rim = new THREE.DirectionalLight(AMBER, 0.35);     rim.position.set(180, 40, -220); scene.add(rim);
+
+  // ---- fixed camera pose (no auto-spin) ----
+  const HALF = Math.PI/2;
+  let R = 430, theta = 1.15, phi = 1.14, dragging=false, px=0, py=0;
+  const clampPhi = v => Math.max(0.05, Math.min(Math.PI-0.05, v));
+
+  const poseEl = document.getElementById('pose');
+  function updatePose(){
+    let az = Math.round(theta*180/Math.PI) % 360; if(az<0) az+=360;
+    const el = Math.round(90 - phi*180/Math.PI);
+    poseEl.innerHTML = 'az '+az+'&deg; · el '+el+'&deg; · zoom '+Math.round(R);
+  }
+
+  const down=function(e){dragging=true;const t=e.touches?e.touches[0]:e;px=t.clientX;py=t.clientY;};
+  const move=function(e){if(!dragging)return;const t=e.touches?e.touches[0]:e;
+    theta-=(t.clientX-px)*0.006; phi=clampPhi(phi-(t.clientY-py)*0.006);
+    px=t.clientX;py=t.clientY; if(e.cancelable)e.preventDefault(); updatePose();};
+  const up=function(){dragging=false;};
+  canvas.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  canvas.addEventListener('touchstart',down,{passive:false}); canvas.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+  canvas.addEventListener('wheel',function(e){R=Math.max(250,Math.min(820,R+e.deltaY*0.4));e.preventDefault();updatePose();},{passive:false});
+
+  window.addEventListener('keydown',function(e){
+    const s=e.shiftKey?0.004:0.02;
+    if(e.key==='ArrowLeft') theta-=s;
+    else if(e.key==='ArrowRight') theta+=s;
+    else if(e.key==='ArrowUp') phi=clampPhi(phi-s);
+    else if(e.key==='ArrowDown') phi=clampPhi(phi+s);
+    else if(e.key==='+'||e.key==='=') R=Math.max(250,R-10);
+    else if(e.key==='-'||e.key==='_') R=Math.min(820,R+10);
+    else return;
+    e.preventDefault(); updatePose();
+  });
+
+  document.getElementById('faceon').onclick=function(){ theta=HALF; phi=HALF; updatePose(); };
+  document.getElementById('iso').onclick   =function(){ theta=1.15; phi=1.05; R=430; updatePose(); };
+
+  // ---- capture current pose to a square PNG ----
+  function capture(transparent){
+    const S=2048;
+    renderer.setPixelRatio(1);
+    renderer.setSize(S,S,false);
+    camera.aspect=1; camera.updateProjectionMatrix();
+    scene.fog=null;
+    renderer.setClearColor(0x13171A, transparent?0:1);
+    camera.position.set(R*Math.sin(phi)*Math.cos(theta), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta));
+    camera.lookAt(0,0,0);
+    renderer.render(scene,camera);
+    const url=renderer.domElement.toDataURL('image/png');
+    // restore live view
+    scene.fog=FOG; renderer.setClearColor(0x13171A,1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)); resize();
+    // present
+    const img=document.getElementById('shotimg'); img.src=url;
+    const dl=document.getElementById('shotdl');
+    dl.href=url; dl.download = transparent?'topographer-icon-3d.png':'topographer-icon-3d-slate.png';
+    document.getElementById('shot').style.display='flex';
+  }
+  document.getElementById('cap').onclick =function(){ capture(true); };
+  document.getElementById('capS').onclick=function(){ capture(false); };
+
+  function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  addEventListener('resize',resize); resize(); updatePose();
+
+  function tick(){
+    requestAnimationFrame(tick);
+    core.material.emissiveIntensity = 1.15 + Math.sin(Date.now()*0.0024)*0.20;
+    camera.position.set(R*Math.sin(phi)*Math.cos(theta), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta));
+    camera.lookAt(0,0,0);
+    renderer.render(scene,camera);
+  }
+  tick();
+})();
+</script>
+</body>
+</html>

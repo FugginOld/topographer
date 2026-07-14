@@ -33,7 +33,7 @@ jobs:
       - name: Store path-injection barrier + slug policy
         run: python renderers/html/store.py
       - name: Linux collector self-test
-        run: python scanners/make_linux_topology.py --selftest
+        run: python scanners/make_linux_topo.py --selftest
 
   static:
     name: shell + dashboard JS

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <path id="b" d="M0,-50 C26,-49 49,-27 48,2 C47,29 25,49 -3,48 C-31,47 -49,26 -48,-4 C-47,-31 -27,-50 0,-50 Z"/>
+  </defs>
+  <use href="#b" transform="translate(256,256) scale(3.05)" fill="none" stroke="#E3A63A" stroke-width="7.5"/>
+  <use href="#b" transform="translate(268,262) scale(1.5)" fill="none" stroke="#E3A63A" stroke-width="15"/>
+  <circle cx="272" cy="266" r="52" fill="#4CC6C6"/>
+</svg>

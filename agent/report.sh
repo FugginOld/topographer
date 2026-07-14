@@ -36,4 +36,4 @@ done
 ARGS=(--server "$SERVER" --report)
 [ -n "$NAME" ] && ARGS+=(--name "$NAME")
 echo "reporting to $SERVER${NAME:+ as '$NAME'}  (Ctrl-C to stop)"
-exec python3 topology_agent.py "${ARGS[@]}"
+exec python3 topo_agent.py "${ARGS[@]}"

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Report this machine's hardware topology to a central dashboard server.
 
-Runs the OS-appropriate generator (make_pc_topology.py on Windows,
-make_linux_topology.py on Linux) and POSTs the JSON to the server's
+Runs the OS-appropriate generator (make_pc_topo.py on Windows,
+make_linux_topo.py on Linux) and POSTs the JSON to the server's
 /api/ingest. Each host stores as one stable entry (re-pushes overwrite),
 so schedule this to keep the map fresh:
 
-    Windows : Task Scheduler -> python topology_agent.py --server http://dash.lan:8770
+    Windows : Task Scheduler -> python topo_agent.py --server http://dash.lan:8770
     Linux   : systemd timer / cron -> same command
 
-    python topology_agent.py --server http://HOST:8770 [--name NAME] [--token SECRET]
-    python topology_agent.py --server http://HOST:8770 --file out/topologies/x.json   # re-push, no scan
+    python topo_agent.py --server http://HOST:8770 [--name NAME] [--token SECRET]
+    python topo_agent.py --server http://HOST:8770 --file out/topologies/x.json   # re-push, no scan
 
 --name defaults to this machine's hostname. --token must match the server's
-TOPO_TOKEN env var if it sets one. Needs make_*_topology.py alongside this file.
+TOPO_TOKEN env var if it sets one. Needs make_*_topo.py alongside this file.
 """
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)           # repo root (agent/ -> ..)
 sys.path.insert(0, ROOT)
-from core import local_telemetry as _tele   # noqa: E402  same sampler topology_server.py uses
+from core import local_telemetry as _tele   # noqa: E402  same sampler topo_server.py uses
 
-GENERATOR = "make_pc_topology.py" if sys.platform.startswith("win") else "make_linux_topology.py"
+GENERATOR = "make_pc_topo.py" if sys.platform.startswith("win") else "make_linux_topo.py"
 
 
 def generate(name: str) -> dict:
@@ -91,11 +91,11 @@ def report(server: str, name: str, token: str, interval: float, topo_every: floa
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:200]
         if e.code == 404:
-            sys.exit(f"server returned 404 for /api/ingest — {server} is running an OLD topology_server.py.\n"
-                     f"On the server: stop it, `git pull`, and restart (.\\server.ps1 or python renderers/html/topology_server.py).")
+            sys.exit(f"server returned 404 for /api/ingest — {server} is running an OLD topo_server.py.\n"
+                     f"On the server: stop it, `git pull`, and restart (.\\server.ps1 or python renderers/html/topo_server.py).")
         sys.exit(f"server rejected the push: HTTP {e.code} {detail}")
     except (urllib.error.URLError, OSError) as e:
-        sys.exit(f"could not reach {server}: {e}  (is topology_server.py running? firewall open on 8770?)")
+        sys.exit(f"could not reach {server}: {e}  (is topo_server.py running? firewall open on 8770?)")
     print(f"reporting '{name}' (id={tid}) to {server} every {interval}s; Ctrl-C to stop")
     push_services(server, tid, token)               # initial container/service snapshot
     last_topo = time.monotonic()

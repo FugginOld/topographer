@@ -1,6 +1,10 @@
-# topologygenerator
+# Topographer
 
-[![CI](https://github.com/FugginOld/topologygenerator/actions/workflows/ci.yml/badge.svg)](https://github.com/FugginOld/topologygenerator/actions/workflows/ci.yml)
+<p align="center">
+  <img src="docs/branding/topographer-banner.png" alt="Topographer" width="820">
+</p>
+
+[![CI](https://github.com/FugginOld/topographer/actions/workflows/ci.yml/badge.svg)](https://github.com/FugginOld/topographer/actions/workflows/ci.yml)
 
 Two topology tools in one repo:
 
@@ -21,15 +25,15 @@ Map the real hardware of every machine on your network and watch them live:
 
 ```text
    Windows PC ─┐  ./agent/report.sh  (or agent\report.ps1)
-   Linux box  ─┼──►  topology_server.py on one host  ──►  live dashboard, one card per machine
+   Linux box  ─┼──►  topo_server.py on one host  ──►  live dashboard, one card per machine
    Proxmox    ─┘     (POST /api/ingest + telemetry)
 ```
 
-- One **server** runs `python renderers/html/topology_server.py`; open `http://HOST:8770`.
+- One **server** runs `python renderers/html/topo_server.py`; open `http://HOST:8770`.
 - Each machine runs an **agent** that scans its own hardware and pushes its
   topology and live telemetry (`agent/report.sh` on Linux, `agent/report.ps1` on Windows, or
   the `bootstrap.sh` one-liner for a fresh Debian box).
-- Scanners: `scanners/make_pc_topology.py` (Windows, PnP/CIM) and `scanners/make_linux_topology.py`
+- Scanners: `scanners/make_pc_topo.py` (Windows, PnP/CIM) and `scanners/make_linux_topo.py`
   (Linux, sysfs/proc). Live metrics: `core/local_telemetry.py` (real CPU temp on Linux).
 
 Full step-by-step — server firewall, each reporting machine, persistence,
@@ -38,7 +42,7 @@ naming, tokens, troubleshooting — is in **[HOWTO.md](HOWTO.md)**.
 ## How it works
 
 ```text
-sources ──▶ collectors ──▶ topology.json ──▶ renderers
+sources ──▶ collectors ──▶ topo.json ──▶ renderers
 (live)      (read-only)     (canonical)       (html / svg / mermaid)
 ```
 
@@ -51,7 +55,7 @@ model — so you can add outputs without touching collection.
 
 ```bash
 pip install -r requirements.txt            # only PyYAML is required
-python renderers/html/topology_server.py   # http://localhost:8770
+python renderers/html/topo_server.py   # http://localhost:8770
 ```
 
 On a Linux host, `./install.sh` sets the dashboard up as a systemd service
@@ -68,8 +72,8 @@ cp config.example.yaml config.yaml         # edit — this file is gitignored
 # enable unifi / proxmox / etc. with their API keys, then re-scan
 ```
 
-Prefer the CLI? `python scanners/make_network_topology.py --config config.yaml` writes
-`out/topology.json` + `.svg` + `.mmd` directly.
+Prefer the CLI? `python scanners/make_network_topo.py --config config.yaml` writes
+`out/topo.json` + `.svg` + `.mmd` directly.
 
 **Adding a machine to the fleet:** right-click any host in the network map →
 *Generate machine topology*. If SSH remote-scan is configured it scans over SSH;
@@ -98,21 +102,21 @@ are **stdlib-only** (no `requests`); the gateway/API collectors auto-degrade to
 ## Renderers
 
 - **`renderers/html/`** — animated dashboard (VLAN zones, firewall hub, Tailscale
-  overlay toggle, click-to-isolate). Reads `topology.json`; refreshes every 30s.
+  overlay toggle, click-to-isolate). Reads `topo.json`; refreshes every 30s.
 - **`renderers/static_svg.py`** — Graphviz `dot` → SVG/PNG for README/wiki.
-- **`renderers/mermaid.py`** — `topology.mmd`, renders on GitHub, diffs cleanly.
+- **`renderers/mermaid.py`** — `topo.mmd`, renders on GitHub, diffs cleanly.
 
 ## Automation
 
 Runs on a homelab host, not GitHub Actions (Actions can't reach your LAN). See
 `systemd/` for a timer that regenerates the map every 10 minutes. If you want
-history/diffing, snapshot each `topology.json` into SQLite and diff runs.
+history/diffing, snapshot each `topo.json` into SQLite and diff runs.
 
 ## Security
 
 Your generated topology is a map of your network. **Keep it out of git.**
 `.gitignore` already excludes `config.yaml`, `out/`, `*.raw.json`, and
-`topology.json`. Recommended: keep this repo **private**. If public, only ever
+`topo.json`. Recommended: keep this repo **private**. If public, only ever
 commit the tooling and `config.example.yaml` (dummy values). One accidental
 `git add -A` of a build artifact leaks the whole layout.
 
@@ -121,19 +125,19 @@ commit the tooling and `config.example.yaml` (dummy values). One accidental
 ```text
 collectors/   read-only source adapters (one file per source)
 core/         schema · normalize · enrich · detect (gateway fingerprint) · oui.csv
-renderers/    html/ (dashboard + topology_server.py) · static_svg.py · mermaid.py
-systemd/      units: topology-server (dashboard) · topology-agent · timer
+renderers/    html/ (dashboard + topo_server.py) · static_svg.py · mermaid.py
+systemd/      units: topo-server (dashboard) · topo-agent · timer
 tests/        fixtures + end-to-end pipeline test
-scanners/make_network_topology.py   network topology orchestrator (collectors → renderers)
+scanners/make_network_topo.py   network topology orchestrator (collectors → renderers)
 
 # hardware topology + fleet dashboard (see HOWTO.md)
-scanners/make_pc_topology.py      Windows hardware scan (PnP/CIM)
-scanners/make_linux_topology.py   Linux hardware scan (sysfs/proc/USB/thermal)
+scanners/make_pc_topo.py      Windows hardware scan (PnP/CIM)
+scanners/make_linux_topo.py   Linux hardware scan (sysfs/proc/USB/thermal)
 core/local_telemetry.py       shared live CPU/net/disk/temp sampler
-agent/topology_agent.py        push topology + telemetry to the server
+agent/topo_agent.py        push topology + telemetry to the server
 install.sh · uninstall.sh  set up / remove the dashboard as a Linux service
 agent/report.sh · agent/report.ps1   run the agent (self-updating)
-server/server.ps1        start the dashboard on Windows (firewall + topology_server.py)
+server/server.ps1        start the dashboard on Windows (firewall + topo_server.py)
 bootstrap.sh             agent one-liner install (Linux/Unraid): systemd / go-script /
                          TOPO_ONCE snapshot — adapts to the host, git-free
 bootstrap.ps1            agent one-liner install (Windows): scheduled task, zip-fetch

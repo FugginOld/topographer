@@ -1,5 +1,5 @@
 # Start the topology dashboard server: ensures the firewall rule, prints the
-# LAN address to give reporting machines, and runs topology_server.py.
+# LAN address to give reporting machines, and runs topo_server.py.
 #
 #   .\server.ps1                       # port 8770
 #   .\server.ps1 -Port 9000            # different port
@@ -29,10 +29,10 @@ if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContin
   Write-Host "firewall: TCP $Port already allowed"
 }
 
-# --- optional shared secret passed to topology_server.py via the environment ---
+# --- optional shared secret passed to topo_server.py via the environment ---
 if ($Token) { $env:TOPO_TOKEN = $Token; Write-Host "ingest token: enabled" }
 
-# --- free the port: an old topology_server.py still holding it would keep serving stale code ---
+# --- free the port: an old topo_server.py still holding it would keep serving stale code ---
 $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($conn) {
   $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
@@ -59,4 +59,4 @@ Write-Host "dashboard : http://localhost:$Port"
 foreach ($ip in $ips) { Write-Host "agents -> : http://$($ip):$Port" }
 Write-Host ""
 
-& $py.Source renderers\html\topology_server.py --port $Port
+& $py.Source renderers\html\topo_server.py --port $Port

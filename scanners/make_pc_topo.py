@@ -20,7 +20,7 @@ read its underlying source (the Win32 PnP/CIM device tree) directly.
     up   link state, network ports only
     link bus label drawn on the edge from the parent ("x4 G4", "DDR5", "USB")
 
-    python make_pc_topology.py [--out out/topology_pc.json] [--name "my pc"]
+    python make_pc_topo.py [--out out/topo_pc.json] [--name "my pc"]
 """
 from __future__ import annotations
 
@@ -334,11 +334,11 @@ def build(lines: list[str]) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join("out", "topology_pc.json"))
+    ap.add_argument("--out", default=os.path.join("out", "topo_pc.json"))
     ap.add_argument("--name", default="my desktop pc")
     args = ap.parse_args()
     if not sys.platform.startswith("win"):
-        sys.exit("make_pc_topology.py reads Windows hardware via PowerShell/CIM — run it on the PC.")
+        sys.exit("make_pc_topo.py reads Windows hardware via PowerShell/CIM — run it on the PC.")
 
     nodes = build(probe())
     topo = {"name": args.name,

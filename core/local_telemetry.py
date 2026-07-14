@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Live hardware metrics for the local machine — shared by topology_server.py (local HUD)
-and topology_agent.py (per-host push). One call = one point-in-time sample.
+"""Live hardware metrics for the local machine — shared by topo_server.py (local HUD)
+and topo_agent.py (per-host push). One call = one point-in-time sample.
 
     sample() -> {cpu, cpu_temp, net_gbps, disk_mbps, nics:{name: gbps}}
 

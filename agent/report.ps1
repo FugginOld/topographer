@@ -69,7 +69,7 @@ $py = Get-Command python -ErrorAction SilentlyContinue
 if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
 if (-not $py) { Write-Error "Python 3 not found on PATH - install it and re-run."; exit 1 }
 
-$argv = @("topology_agent.py", "--server", $Server, "--report")
+$argv = @("topo_agent.py", "--server", $Server, "--report")
 $suffix = ""
 if ($Name) { $argv += @("--name", $Name); $suffix = " as '$Name'" }
 Write-Host "reporting to $Server$suffix  (Ctrl-C to stop)"

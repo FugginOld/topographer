@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PC fabric dashboard</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon-180.png">
 <style>
   /* ---- SKINS: every color lives in a CSS var; the SVG/JS read these too (see refreshColors()).
          Flat themes only — solid panels, flat backgrounds, no glass/frost. A new skin = one
@@ -199,7 +203,7 @@ const CLS={}, COL={};
 function refreshColors(){
   const s=getComputedStyle(document.body), g=n=>s.getPropertyValue(n).trim();
   CLS.gen5=g('--gen5');CLS.gen4=g('--gen4');CLS.gen3=g('--gen3');
-  // network zone classes (from make_network_topology zones) -> fixed bands, matches static_svg
+  // network zone classes (from make_network_topo zones) -> fixed bands, matches static_svg
   Object.assign(CLS,{mgmt:'#63d0ff',lan:'#46e0a4',srv:'#ffc451',adsb:'#ff9d5c',
     iot:'#ff5f6d',guest:'#8b7bff',dmz:'#ff9d5c',unknown:'#8899aa'});
   COL.line=g('--line');COL.hud=g('--hud');COL.dim=g('--hud-dim');
@@ -229,11 +233,11 @@ async function loadList(){
   catch(e){ TOPOS=[]; }
   renderList();
   if(!activeId && TOPOS.length) selectTopo(TOPOS[0].id);
-  else if(!TOPOS.length){ TOPO=null; showErr('no topologies yet.<br><br>hit <b>GENERATE</b> to map this PC, or run<br><code>python scanners/make_pc_topology.py</code>'); }
+  else if(!TOPOS.length){ TOPO=null; showErr('no topologies yet.<br><br>hit <b>GENERATE</b> to map this PC, or run<br><code>python scanners/make_pc_topo.py</code>'); }
 }
 function renderList(){
   const list=document.getElementById('list');list.innerHTML='';
-  if(!TOPOS.length){ list.innerHTML='<div class="empty">no topologies yet.<br><br>hit GENERATE, or run<br><code>python scanners/make_pc_topology.py</code></div>'; return; }
+  if(!TOPOS.length){ list.innerHTML='<div class="empty">no topologies yet.<br><br>hit GENERATE, or run<br><code>python scanners/make_pc_topo.py</code></div>'; return; }
   const item=t=>{
     const d=document.createElement('div');
     d.className='item'+(t.id===activeId?' active':'');
@@ -367,7 +371,7 @@ async function loadGwDash(){
     document.getElementById('dashupd').textContent=d.error?'':('updated '+new Date().toLocaleTimeString());
     return d;
   }catch(e){
-    renderGwDash({error:'could not reach the dashboard API — update and restart topology_server.py.'});
+    renderGwDash({error:'could not reach the dashboard API — update and restart topo_server.py.'});
     document.getElementById('dashupd').textContent='';
     return null;
   }
@@ -639,7 +643,7 @@ async function pollTele(){
     const q='api/telemetry?host='+encodeURIComponent(activeId||'')+'&_='+Date.now();
     const r=await fetch(q);
     if(r.ok){ TELE=await r.json(); if(TELE.error)console.warn('telemetry error:',TELE.error); }
-    else console.warn('telemetry HTTP '+r.status+' — restart topology_server.py (stale server has no /api/telemetry route)');
+    else console.warn('telemetry HTTP '+r.status+' — restart topo_server.py (stale server has no /api/telemetry route)');
   }catch(e){ console.warn('telemetry fetch failed:',e.message); }
 }
 const norm=s=>String(s).toLowerCase().replace(/\[r\]|\(r\)|\[tm\]|\(tm\)/g,'').replace(/[^a-z0-9]+/g,' ').trim();

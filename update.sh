@@ -5,16 +5,16 @@
 # are gitignored, so they're never in the tarball and survive the extract.
 #
 #   fresh install (no git needed):
-#     curl -fsSL https://raw.githubusercontent.com/FugginOld/topologygenerator/main/update.sh | bash
+#     curl -fsSL https://raw.githubusercontent.com/FugginOld/topographer/main/update.sh | bash
 #   update an existing install (or re-run the one-liner):
-#     ~/topologygenerator/update.sh
+#     ~/topographer/update.sh
 #   options pass straight through to install.sh, e.g.:
-#     TOPO_TOKEN=secret ~/topologygenerator/update.sh
+#     TOPO_TOKEN=secret ~/topographer/update.sh
 set -euo pipefail
 
-REPO="${TOPO_REPO:-https://github.com/FugginOld/topologygenerator}"
+REPO="${TOPO_REPO:-https://github.com/FugginOld/topographer}"
 TARURL="${REPO%.git}/archive/refs/heads/main.tar.gz"
-DIR="${TOPO_DIR:-$HOME/topologygenerator}"
+DIR="${TOPO_DIR:-$HOME/topographer}"
 
 # Extract only the files needed to RUN the server + serve the client — skip the
 # dev-only tree (tests, CI). out/ and config.yaml are gitignored so they're not

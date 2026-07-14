@@ -29,9 +29,9 @@ hardware fabric uses (`cap, grp, up, fill, link, iface`).
 
 Owned by `renderers/card.py` (a pure, zero-dependency dataclass). Two writers go
 *through* it — `renderers/network_cards.py::from_topology` (reshapes a `Topology`
-into the WAN → gateway → VLAN → host tree) and `scanners/make_pc_topology.py` (validates
+into the WAN → gateway → VLAN → host tree) and `scanners/make_pc_topo.py` (validates
 its output against `Card` at the `build()` boundary). The third,
-`scanners/make_linux_topology.py`, emits the same contract **inline**: `scan_host` pipes
+`scanners/make_linux_topo.py`, emits the same contract **inline**: `scan_host` pipes
 that file *alone* over SSH to hosts without the repo, so it must stay single-file
 self-contained and can't import `Card`. It's the deliberate exception — keep it
 in sync with `Card`.

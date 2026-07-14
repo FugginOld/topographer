@@ -1,7 +1,7 @@
 """Render a Topology to Mermaid flowchart text.
 
 Mermaid is version-controllable and renders on GitHub, so a committed
-out/topology.mmd (from a *sanitized* run) makes the repo self-documenting.
+out/topo.mmd (from a *sanitized* run) makes the repo self-documenting.
 VLANs become subgraphs; overlay links render dashed.
 """
 from __future__ import annotations

@@ -18,9 +18,9 @@ by IP/hostname, VLAN by subnet) → `core/enrich.py` (vendor via `core/oui.csv`,
 
 Install: `pip install -r requirements.txt`
 
-- Dashboard server: `python renderers/html/topology_server.py [--port 8770]`
-- Map this machine: `python scanners/make_pc_topology.py` (Windows) · `python scanners/make_linux_topology.py` (Linux)
-- Map the network: `python scanners/make_network_topology.py`
+- Dashboard server: `python renderers/html/topo_server.py [--port 8770]`
+- Map this machine: `python scanners/make_pc_topo.py` (Windows) · `python scanners/make_linux_topo.py` (Linux)
+- Map the network: `python scanners/make_network_topo.py`
 - Report to a dashboard: `agent/report.sh http://<dashboard-ip>:8770`
 
 Tests — exactly what CI runs, all offline:
@@ -29,7 +29,7 @@ python -m compileall -q .
 python tests/test_pipeline.py
 python tests/test_cards.py
 python renderers/html/store.py                  # store path-injection barrier
-python scanners/make_linux_topology.py --selftest
+python scanners/make_linux_topo.py --selftest
 ```
 Also in CI: `bash -n *.sh`; `.ps1` files must be ASCII; dashboard JS via `node --check` on the
 extracted `<script>` block.
@@ -38,17 +38,17 @@ extracted `<script>` block.
 
 1. **Never commit `config.yaml`** — it is gitignored and holds secrets (API keys, tokens). Keep real
    IPs / users / hostnames out of the tracked `config.example.yaml`; use placeholders.
-2. **`scanners/make_linux_topology.py` imports nothing from this repo.** The dashboard's remote scan
+2. **`scanners/make_linux_topo.py` imports nothing from this repo.** The dashboard's remote scan
    pipes it alone over SSH, so it must stay single-file self-contained (stdlib only). Verify:
-   `grep -nE '^(from|import) (core|renderers|collectors|scanners|make_)' scanners/make_linux_topology.py`
+   `grep -nE '^(from|import) (core|renderers|collectors|scanners|make_)' scanners/make_linux_topo.py`
    returns nothing. (Background: `CONTEXT.md` → Card.)
 3. **Collectors are stdlib-only** (`urllib`, not `requests`), return `[]` on any source failure
-   (never raise), and must be registered in `scanners/make_network_topology.py`. (`CONTEXT.md` → Collector.)
+   (never raise), and must be registered in `scanners/make_network_topo.py`. (`CONTEXT.md` → Collector.)
 4. **`.ps1` files must be ASCII** — Windows PowerShell 5.1 reads BOM-less files as ANSI, so a stray
    non-ASCII byte corrupts them (CI enforces this). Bind PS named params with a hashtable splat, not
    an array (an array splat binds positionally).
 5. **Dashboard `index.html` is served from disk per request** — HTML/CSS/JS edits need only a browser
-   hard-refresh, no restart. Only Python changes need `systemctl restart topology-server`.
+   hard-refresh, no restart. Only Python changes need `systemctl restart topo-server`.
 6. **The dashboard's SVG builder uses `textContent`, never `innerHTML`,** for scanned or host-supplied
    strings — device labels are untrusted. Keep it that way.
 

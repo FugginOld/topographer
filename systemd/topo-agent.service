@@ -1,0 +1,22 @@
+# Persistent topology + telemetry reporting agent (systemd).
+# Edit User= and the path, then:
+#   sudo cp systemd/topo-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now topo-agent
+#   journalctl -u topo-agent -f      # watch it
+[Unit]
+Description=Topographer reporting agent (pushes hardware map + live telemetry)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/topographer
+ExecStart=/home/YOUR_USER/topographer/agent/report.sh http://DASHBOARD-IP:8770
+Restart=always
+RestartSec=10
+# Environment=TOPO_TOKEN=your-shared-secret
+
+[Install]
+WantedBy=multi-user.target
