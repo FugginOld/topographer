@@ -246,6 +246,8 @@ def health_summary(health: list[dict], devices: list[dict], clients: list[dict])
             "asn": wan.get("asn"),
             "isp_org": wan.get("isp_organization"),
             "speedtest_status": www.get("speedtest_status"),
+            "ping": round(_num(www.get("speedtest_ping"))),        # last speedtest ping (ms)
+            "lastrun": _num(www.get("speedtest_lastrun")),         # unix ts; grows on a new run
         },
         "throughput": {
             "rx_bps": _num(wan.get("rx_bytes-r")),   # live download rate (WAN in)

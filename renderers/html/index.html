@@ -329,9 +329,24 @@ document.getElementById('dashrefresh').onclick=loadGwDash;
 document.getElementById('dashopen').onclick=()=>{ const u=gatewayUrl(); if(u) window.open(u,'_blank','noopener'); else alert('No gateway address known for this topology.'); };
 document.getElementById('dashspeed').onclick=async()=>{
   const btn=document.getElementById('dashspeed'); btn.disabled=true;
-  document.getElementById('dashupd').textContent='speedtest running…';
+  const open=()=>notice.style.display!=='none';                 // only touch the popup while it's up
+  showNotice('WAN Speedtest','<div>Starting… this saturates the WAN link for ~30s.</div>');
+  const d0=await loadGwDash(); const baseline=(d0&&d0.wan&&d0.wan.lastrun)||0;
   try{ await fetch('api/gwspeedtest',{method:'POST'}); }catch(e){}
-  let n=0; const t=setInterval(()=>{ loadGwDash(); if(++n>=8){ clearInterval(t); btn.disabled=false; } },5000);  // result lands in ~30s
+  let n=0;
+  const t=setInterval(async()=>{
+    const w=((await loadGwDash())||{}).wan||{};
+    const done=(w.lastrun||0)>baseline || ((w.down_mbps||0)>0 && (w.speedtest_status||'')!=='Running' && baseline===0);
+    if(done){
+      clearInterval(t); btn.disabled=false;
+      if(open()) showNotice('WAN Speedtest',`<div style="line-height:2">Download <b>${w.down_mbps} Mbps</b><br>Upload <b>${w.up_mbps} Mbps</b><br>Ping <b>${w.ping} ms</b></div>`);
+      return;
+    }
+    if(open()) showNotice('WAN Speedtest',`<div>Running… <span style="color:var(--hud-dim)">(${w.speedtest_status||'contacting gateway'})</span></div>`);
+    if(++n>=18){ clearInterval(t); btn.disabled=false;
+      if(open()) showNotice('WAN Speedtest','<div>No result after ~90s — your gateway may not accept API-triggered speedtests. Run one from the UniFi app and the tile will pick it up.</div>');
+    }
+  },5000);
 };
 
 async function loadGwDash(){
@@ -340,9 +355,11 @@ async function loadGwDash(){
     const d=await r.json();
     renderGwDash(d);
     document.getElementById('dashupd').textContent=d.error?'':('updated '+new Date().toLocaleTimeString());
+    return d;
   }catch(e){
     renderGwDash({error:'could not reach the dashboard API — update and restart topology_server.py.'});
     document.getElementById('dashupd').textContent='';
+    return null;
   }
 }
 // DOM builders — textContent keeps scanned device names inert (never innerHTML for host data)
