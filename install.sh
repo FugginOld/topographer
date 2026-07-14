@@ -20,12 +20,24 @@ if [ -f /etc/unraid-version ]; then
   echo "Unraid detected — installing via boot 'go' script (no systemd)…"
   command -v python3 >/dev/null 2>&1 || {
     echo "python3 not found — install it (NerdTools plugin) and re-run"; exit 1; }
+
+  # The network scan parses config.yaml, which needs PyYAML. Unraid's python3 has
+  # no PyYAML and no persistent site-packages (OS runs from RAM), so vendor it into
+  # appdata and point PYTHONPATH there from the launcher (survives reboot).
+  if ! PYTHONPATH="$DIR/vendor" python3 -c "import yaml" 2>/dev/null; then
+    echo "vendoring PyYAML -> $DIR/vendor …"
+    python3 -m pip --version >/dev/null 2>&1 || python3 -m ensurepip >/dev/null 2>&1 || true
+    python3 -m pip install -q --target "$DIR/vendor" pyyaml \
+      || echo "warn: PyYAML install failed — network scan (config.yaml) stays off until it's present"
+  fi
+
   LAUNCHER=/boot/config/topo-server.sh
   cat > "$LAUNCHER" <<EOF
 #!/bin/bash
 # topology dashboard server launcher — persisted on the Unraid flash by install.sh
 DIR="$DIR"
 for i in \$(seq 1 60); do [ -d "\$(dirname "\$DIR")" ] && break; sleep 5; done  # wait ~5m for array
+export PYTHONPATH="\$DIR/vendor\${PYTHONPATH:+:\$PYTHONPATH}"   # vendored PyYAML (config.yaml)
 ${TOPO_TOKEN:+export TOPO_TOKEN=$TOPO_TOKEN}
 exec python3 "\$DIR/renderers/html/topo_server.py"
 EOF

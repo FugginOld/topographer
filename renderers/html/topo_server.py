@@ -275,6 +275,8 @@ def generate_network(subnet: str | None = None) -> dict:
         [sys.executable, "scanners/make_network_topo.py", "--config", cfg_path, "--outdir", "out"],
         cwd=ROOT, capture_output=True, text=True,
     )
+    if r.returncode != 0:   # else a stale out/topo.json would mask the failure
+        raise RuntimeError((r.stderr or r.stdout or "scan failed").strip()[-800:])
     src = os.path.join(ROOT, "out", "topo.json")
     if not os.path.exists(src):
         raise RuntimeError((r.stderr or r.stdout or "scan produced nothing").strip()[-800:])
