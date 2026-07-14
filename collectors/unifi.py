@@ -182,6 +182,70 @@ def client_links(clients: list[dict]) -> list[dict]:
     return links
 
 
+def _subsys(health: list[dict], name: str) -> dict:
+    return next((s for s in (health or []) if s.get("subsystem") == name), {})
+
+
+def _num(x) -> float:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def health_summary(health: list[dict], devices: list[dict], clients: list[dict]) -> dict:
+    """Compact live gateway summary for the dashboard panel: WAN, throughput,
+    clients, gateway + infra device health. Pure — unit-tested with sample data;
+    the collector feeds it the three live API lists (stat/health|device|sta)."""
+    wan, www = _subsys(health, "wan"), _subsys(health, "www")
+    gw = next((d for d in (devices or []) if d.get("type") in ("ugw", "udm", "uxg")), {})
+    sysstat = gw.get("system-stats") or {}
+    clients = clients or []
+    wired = sum(1 for c in clients if c.get("is_wired"))
+    guest = sum(1 for c in clients if c.get("is_guest"))
+    status = wan.get("status") or www.get("status")
+    return {
+        "gateway": {
+            "name": gw.get("name") or gw.get("model") or wan.get("gw_name"),
+            "model": gw.get("model"),
+            "firmware": gw.get("displayable_version") or gw.get("version"),
+            "uptime": _fmt_uptime(gw.get("uptime") or wan.get("uptime")),
+            "cpu": _num(sysstat.get("cpu")),
+            "mem": _num(sysstat.get("mem")),
+            "temp": _num(gw.get("general_temperature")),
+        },
+        "wan": {
+            "up": status == "ok",
+            "status": status,
+            "ip": wan.get("wan_ip") or www.get("wan_ip"),
+            "isp": wan.get("isp_name") or wan.get("gw_name"),
+            "latency": round(_num(www.get("latency") or wan.get("latency"))),
+            "down_mbps": round(_num(www.get("xput_down") or wan.get("xput_down")), 1),
+            "up_mbps": round(_num(www.get("xput_up") or wan.get("xput_up")), 1),
+        },
+        "throughput": {
+            "rx_bps": _num(wan.get("rx_bytes-r")),   # download rate (WAN in)
+            "tx_bps": _num(wan.get("tx_bytes-r")),   # upload rate   (WAN out)
+        },
+        "clients": {
+            "total": len(clients),
+            "wired": wired,
+            "wireless": len(clients) - wired,
+            "guest": guest,
+        },
+        "devices": [
+            {
+                "name": d.get("name") or d.get("model") or d.get("mac"),
+                "kind": _DEV_KIND.get(d.get("type"), "device"),
+                "up": d.get("state", 1) == 1,
+                "clients": d.get("num_sta"),
+                "uptime": _fmt_uptime(d.get("uptime")),
+            }
+            for d in (devices or []) if d.get("mac")
+        ],
+    }
+
+
 class UnifiCollector(Collector):
     name = "unifi"
 
@@ -255,6 +319,12 @@ class UnifiCollector(Collector):
         items += client_links(self._clients)
         return self._tag(items)
 
+    def dashboard(self) -> dict:
+        """Live gateway summary for the dashboard panel. Uses the same authed
+        _get as collect(); empty API lists just yield an empty summary."""
+        return health_summary(self._get("stat/health"),
+                              self._get("stat/device"), self._get("stat/sta"))
+
 
 if __name__ == "__main__":  # ponytail: transform self-check, no live controller
     nets = [{"name": "IoT", "vlan": 50, "ip_subnet": "10.0.50.1/24", "purpose": "corporate", "enabled": True},
@@ -285,4 +355,15 @@ if __name__ == "__main__":  # ponytail: transform self-check, no live controller
     assert n[0]["name"] == "cam1" and n[0]["nodekind"] == "host", n
     lk = client_links(cl)
     assert lk[0]["dst"] == "aa:bb:cc:00:00:01" and lk[0]["port"] == "7", lk
+    hs = health_summary(
+        [{"subsystem": "wan", "status": "ok", "wan_ip": "47.1.2.3",
+          "rx_bytes-r": 1250000, "tx_bytes-r": 250000, "gw_name": "UCG"},
+         {"subsystem": "www", "status": "ok", "latency": 8, "xput_down": 930.5, "xput_up": 42.1}],
+        devs, cl)
+    assert hs["wan"]["up"] and hs["wan"]["ip"] == "47.1.2.3", hs
+    assert hs["wan"]["down_mbps"] == 930.5 and hs["wan"]["latency"] == 8, hs
+    assert hs["throughput"]["rx_bps"] == 1250000, hs
+    assert hs["clients"]["total"] == 1 and hs["clients"]["wired"] == 1, hs
+    assert hs["gateway"]["model"] == "UDMPRO" and hs["gateway"]["uptime"] == "1d 1h", hs
+    assert any(dv["kind"] == "firewall" for dv in hs["devices"]), hs
     print("unifi transform self-check ok")

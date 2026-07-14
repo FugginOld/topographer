@@ -90,16 +90,33 @@ def list_rows() -> list[dict]:
 GENERATOR = "scanners/make_pc_topology.py" if sys.platform.startswith("win") else "scanners/make_linux_topology.py"
 
 
-def _remote_scan_cfg() -> dict:
-    """remote_scan block from config.yaml, or {} (disabled) if absent/unparseable."""
+def _cfg_block(key: str) -> dict:
+    """A top-level block from config.yaml, or {} if absent/unparseable."""
     path = os.path.join(ROOT, "config.yaml")
     if not os.path.exists(path):
         return {}
     try:
         import yaml
-        return (yaml.safe_load(open(path, encoding="utf-8")) or {}).get("remote_scan") or {}
+        return (yaml.safe_load(open(path, encoding="utf-8")) or {}).get(key) or {}
     except Exception:
         return {}
+
+
+def _remote_scan_cfg() -> dict:
+    return _cfg_block("remote_scan")
+
+
+def gateway_dashboard() -> dict:
+    """Live gateway stats for the dashboard panel, from the UniFi API (the key
+    already in config.yaml). {'error': ...} when UniFi is off or unreachable."""
+    cfg = _cfg_block("unifi")
+    if not cfg.get("enabled"):
+        return {"error": "UniFi is not enabled in config.yaml (set unifi.enabled: true)."}
+    try:
+        from collectors.unifi import UnifiCollector
+        return UnifiCollector(cfg).dashboard()
+    except Exception as e:
+        return {"error": f"gateway query failed: {e}"}
 
 
 def scan_host(host: str, name: str) -> dict:
@@ -264,6 +281,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send(200, host_telemetry(host) if host else telemetry_local())
             except Exception as e:
                 return self._send(200, {**_tele.ZERO, "error": str(e)})
+        if self.path.split("?")[0] == "/api/gwdash":
+            return self._send(200, gateway_dashboard())
         if self.path.startswith("/t/"):
             tid = os.path.basename(self.path.split("?")[0])[:-5]  # strip .json
             try:

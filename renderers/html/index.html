@@ -116,12 +116,22 @@
   #main.dashview #stage,#main.dashview #zoom,#main.dashview #zpct,#main.dashview header .rt{display:none}
   #dashbar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);
     font-size:10px;color:var(--hud-dim);letter-spacing:.06em}
-  #dashurl{flex:1;color:var(--hud);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dashtitle{color:var(--hud);letter-spacing:.14em}
+  #dashupd{margin-left:auto;font-size:9px;color:var(--hud-dim);letter-spacing:.06em}
   #dashbar button{border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--hud);
     font-family:inherit;font-size:9px;letter-spacing:.1em;padding:5px 10px;cursor:pointer;transition:.15s}
   #dashbar button:hover{border-color:var(--hud);background:rgba(var(--glow),.1)}
-  #dashframe{flex:1;border:none;width:100%;background:#fff}
-  #dashhint{padding:6px 12px;font-size:8.5px;color:var(--hud-dim);letter-spacing:.04em;border-top:1px solid var(--line)}
+  #dashpanel{flex:1;overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;align-content:start}
+  .dcard{background:var(--card-fill);border:1px solid var(--line);border-radius:6px;padding:12px 13px;display:flex;flex-direction:column;gap:6px}
+  .dcard.wide{grid-column:1/-1}
+  .dcard .dl{font-size:9px;letter-spacing:.14em;color:var(--hud-dim);text-transform:uppercase}
+  .dcard .dv{font-size:22px;font-weight:700;color:var(--card-title);letter-spacing:-.5px;line-height:1.1;font-variant-numeric:tabular-nums}
+  .dcard .du{font-size:10px;color:var(--hud-dim)}
+  .dcard .drow{display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--ink);padding:4px 0;border-top:1px solid var(--line)}
+  .dcard .dk{color:var(--hud-dim)}
+  .dbadge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:9px;letter-spacing:.12em}
+  .dbadge.ok{color:var(--ok);border:1px solid var(--ok)}
+  .dbadge.bad{color:var(--crit);border:1px solid var(--crit)}
 </style>
 </head>
 <body>
@@ -160,12 +170,12 @@
   <div id="stage"><svg id="svg"></svg></div>
   <div id="dash">
     <div id="dashbar">
-      <span id="dashurl" title="dashboard address"></span>
-      <button id="dashedit" title="change the address">EDIT</button>
-      <button id="dashopen" title="open in a new browser tab">OPEN ↗</button>
+      <span id="dashtitle">GATEWAY DASHBOARD</span>
+      <span id="dashupd"></span>
+      <button id="dashrefresh" title="refresh now">REFRESH</button>
+      <button id="dashopen" title="open the gateway's own UI in a new tab">OPEN UI ↗</button>
     </div>
-    <iframe id="dashframe" referrerpolicy="no-referrer" allow="fullscreen"></iframe>
-    <div id="dashhint">Panel blank? Many gateways block embedding (X-Frame-Options / TLS) — use <b>OPEN ↗</b>.</div>
+    <div id="dashpanel"></div>
   </div>
   <div id="err"></div>
   <div id="ctxmenu"></div>
@@ -284,15 +294,14 @@ document.getElementById('netbtn').onclick=async e=>{
 };
 function spaced(s){return (s||'').toUpperCase().split('').join(' ');}
 
-// ================= VIEW: topology <-> gateway dashboard =================
+// ================= VIEW: topology <-> native gateway dashboard =================
 const viewtabs=document.getElementById('viewtabs'), mainEl=document.getElementById('main');
-const dashframe=document.getElementById('dashframe'), dashurlEl=document.getElementById('dashurl');
-let viewMode='topology';
-const loadDashUrls=()=>{ try{return JSON.parse(localStorage.getItem('dashUrls')||'{}');}catch(e){return {};} };
-let dashUrls=loadDashUrls();
-const saveDashUrls=()=>{ try{localStorage.setItem('dashUrls',JSON.stringify(dashUrls));}catch(e){} };
+let viewMode='topology', dashTimer=null;
+const loadOptIn=()=>{ try{return JSON.parse(localStorage.getItem('dashOptIn')||'{}');}catch(e){return {};} };
+let dashOptIn=loadOptIn();
+const saveOptIn=()=>{ try{localStorage.setItem('dashOptIn',JSON.stringify(dashOptIn));}catch(e){} };
 
-// the gateway's own web UI = the firewall node's address (UniFi/OPNsense/pfSense serve https)
+// the gateway's own web UI (firewall node ip) — used by the OPEN-UI-in-tab button
 function gatewayUrl(){
   const g=(TOPO&&TOPO.nodes||[]).find(n=>n.kind==='firewall');
   const ip=g&&((g.meta&&g.meta.ip)||g.sub);
@@ -303,31 +312,82 @@ function setView(mode){
   mainEl.classList.toggle('dashview',mode==='dashboard');
   document.getElementById('tabTopo').classList.toggle('active',mode==='topology');
   document.getElementById('tabDash').classList.toggle('active',mode==='dashboard');
-  if(mode!=='dashboard') dashframe.src='about:blank';   // stop loading the gateway when hidden
+  if(mode!=='dashboard'){ clearInterval(dashTimer); dashTimer=null; }   // stop polling when hidden
 }
-function openDash(url){
-  dashUrls[activeId]=url; saveDashUrls();
-  dashurlEl.textContent=url; dashframe.src=url;
-  setView('dashboard');
-}
-// DASHBOARD tab: ask before generating one the first time, then remember it per topology
+function openDash(){ setView('dashboard'); loadGwDash(); clearInterval(dashTimer); dashTimer=setInterval(loadGwDash,5000); }
+// DASHBOARD tab: ask before generating one the first time, then remember the opt-in per topology
 document.getElementById('tabDash').onclick=()=>{
   if(!activeId) return;
-  const known=dashUrls[activeId];
-  if(known){ openDash(known); return; }
+  if(dashOptIn[activeId]){ openDash(); return; }
   confirmNotice('Dashboard','Do you want to generate a dashboard for this topology?',()=>{
-    let url=gatewayUrl();
-    if(!url) url=(prompt('Dashboard address for this topology:','https://')||'').trim();
-    if(!url){ setView('topology'); return; }
-    openDash(url);
+    dashOptIn[activeId]=true; saveOptIn(); openDash();
   });
 };
 document.getElementById('tabTopo').onclick=()=>setView('topology');
-document.getElementById('dashopen').onclick=()=>{ const u=dashUrls[activeId]; if(u) window.open(u,'_blank','noopener'); };
-document.getElementById('dashedit').onclick=()=>{
-  const u=(prompt('Dashboard address:',dashUrls[activeId]||'https://')||'').trim();
-  if(u) openDash(u);
-};
+document.getElementById('dashrefresh').onclick=loadGwDash;
+document.getElementById('dashopen').onclick=()=>{ const u=gatewayUrl(); if(u) window.open(u,'_blank','noopener'); else alert('No gateway address known for this topology.'); };
+
+async function loadGwDash(){
+  try{
+    const r=await fetch('api/gwdash?_='+Date.now());
+    const d=await r.json();
+    renderGwDash(d);
+    document.getElementById('dashupd').textContent=d.error?'':('updated '+new Date().toLocaleTimeString());
+  }catch(e){
+    renderGwDash({error:'could not reach the dashboard API — update and restart topology_server.py.'});
+    document.getElementById('dashupd').textContent='';
+  }
+}
+// DOM builders — textContent keeps scanned device names inert (never innerHTML for host data)
+function hel(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+function drow(k,v){const r=hel('div','drow');r.appendChild(hel('span','dk',k));r.appendChild(hel('span',null,String(v)));return r;}
+function statCard(label,value,unit){const c=hel('div','dcard');c.appendChild(hel('div','dl',label));const v=hel('div','dv',String(value));if(unit)v.appendChild(hel('span','du',' '+unit));c.appendChild(v);return c;}
+function renderGwDash(d){
+  const p=document.getElementById('dashpanel'); p.innerHTML='';
+  if(d.error){
+    const e=hel('div','dcard wide'); e.appendChild(hel('div','dl','No dashboard')); e.appendChild(hel('div','du',d.error));
+    const b=hel('button',null,'OPEN GATEWAY UI ↗');
+    b.style.cssText='margin-top:10px;align-self:flex-start;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--hud);font-family:inherit;font-size:9px;letter-spacing:.1em;padding:6px 12px;cursor:pointer';
+    b.onclick=()=>{ const u=gatewayUrl(); if(u) window.open(u,'_blank','noopener'); };
+    e.appendChild(b); p.appendChild(e); return;
+  }
+  const wan=d.wan||{}, tp=d.throughput||{}, cl=d.clients||{}, gw=d.gateway||{};
+  const mbps=b=>((+b||0)*8/1e6);
+  const wc=hel('div','dcard wide'); wc.appendChild(hel('div','dl','WAN / Internet'));
+  const line=hel('div'); line.style.cssText='display:flex;align-items:center;gap:12px;flex-wrap:wrap';
+  line.appendChild(hel('span','dbadge '+(wan.up?'ok':'bad'), wan.up?'ONLINE':'OFFLINE'));
+  if(wan.ip) line.appendChild(hel('span','dv',wan.ip));
+  wc.appendChild(line);
+  if(wan.isp) wc.appendChild(drow('ISP',wan.isp));
+  if(wan.latency) wc.appendChild(drow('Latency',wan.latency+' ms'));
+  if(wan.down_mbps||wan.up_mbps) wc.appendChild(drow('Speedtest',wan.down_mbps+' ↓ / '+wan.up_mbps+' ↑ Mbps'));
+  p.appendChild(wc);
+  p.appendChild(statCard('Download',mbps(tp.rx_bps).toFixed(1),'Mbps'));
+  p.appendChild(statCard('Upload',mbps(tp.tx_bps).toFixed(1),'Mbps'));
+  const cc=statCard('Clients',cl.total!=null?cl.total:'—');
+  cc.appendChild(hel('div','du',(cl.wired||0)+' wired · '+(cl.wireless||0)+' wireless'+(cl.guest?' · '+cl.guest+' guest':'')));
+  p.appendChild(cc);
+  const gc=hel('div','dcard'); gc.appendChild(hel('div','dl','Gateway')); gc.appendChild(hel('div','dv',gw.name||'—'));
+  if(gw.model) gc.appendChild(drow('Model',gw.model));
+  if(gw.firmware) gc.appendChild(drow('Firmware',gw.firmware));
+  if(gw.uptime) gc.appendChild(drow('Uptime',gw.uptime));
+  if(gw.cpu) gc.appendChild(drow('CPU',Math.round(gw.cpu)+'%'));
+  if(gw.mem) gc.appendChild(drow('Memory',Math.round(gw.mem)+'%'));
+  if(gw.temp) gc.appendChild(drow('Temp',Math.round(gw.temp)+'°C'));
+  p.appendChild(gc);
+  const devs=d.devices||[];
+  if(devs.length){
+    const dc=hel('div','dcard wide'); dc.appendChild(hel('div','dl','Devices ('+devs.length+')'));
+    devs.forEach(dev=>{
+      const r=hel('div','drow');
+      r.appendChild(hel('span','dk',(dev.name||'')+(dev.kind?' · '+dev.kind:'')));
+      const rv=hel('span',null,(dev.up?'up':'down')+(dev.clients!=null?' · '+dev.clients+' cl':'')+(dev.uptime?' · '+dev.uptime:''));
+      if(!dev.up) rv.style.color='var(--crit)';
+      r.appendChild(rv); dc.appendChild(r);
+    });
+    p.appendChild(dc);
+  }
+}
 // styled Yes/No confirm, reusing the notice card
 function confirmNotice(title,msg,onYes){
   showNotice(title,`<div>${msg}</div><div class="nc-actions"><button class="nc-btn yes">Yes</button><button class="nc-btn no">No</button></div>`);
