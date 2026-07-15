@@ -136,6 +136,37 @@
   .dcard .du{font-size:10px;color:var(--hud-dim)}
   .dcard .drow{display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--ink);padding:4px 0;border-top:1px solid var(--line)}
   .dcard .dk{color:var(--hud-dim)}
+  /* Widget Store: service-widget panels (own full-width band, like the Glances panel) */
+  .wpanel{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .wcard{background:var(--card-fill);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column}
+  .whead{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .wc-ico{width:16px;height:16px;border-radius:3px;object-fit:contain;flex:0 0 auto}
+  .wh-name{font-size:10.5px;font-weight:600;color:var(--card-title);letter-spacing:.05em;text-transform:uppercase;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wh-btn{background:none;border:0;color:var(--hud-dim);cursor:pointer;font-size:13px;line-height:1;padding:1px 3px;font-family:inherit}
+  .wh-btn:hover{color:var(--hud)}
+  .wrow{display:flex;justify-content:space-between;gap:12px;font-size:10.5px;padding:3px 0;border-top:1px solid var(--line)}
+  .wk{color:var(--hud-dim)}
+  .wv{color:var(--ink);font-variant-numeric:tabular-nums}
+  .wb-empty{font-size:9.5px;color:var(--hud-dim);padding:4px 0;line-height:1.5}
+  /* catalog + config form (shown in the shared notice modal) */
+  .wcat{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;max-width:470px;max-height:66vh;overflow:auto}
+  .wc-card{background:var(--card-fill);border:1px solid var(--line);border-radius:6px;padding:11px 10px;cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+  .wc-card:hover{border-color:var(--hud);background:rgba(var(--glow),.08)}
+  .wc-name{font-size:11px;font-weight:600;color:var(--card-title)}
+  .wc-cat{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--hud)}
+  .wc-desc{font-size:9px;color:var(--hud-dim);line-height:1.4}
+  .wc-empty{font-size:10px;color:var(--hud-dim)}
+  .wform{display:flex;flex-direction:column;gap:9px;min-width:280px;max-height:70vh;overflow:auto}
+  .wf-row{display:flex;flex-direction:column;gap:4px}
+  .wf-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--hud-dim)}
+  .wf-row input[type=text],.wf-row input[type=password],.wf-row input[type=number]{background:var(--bg0);border:1px solid var(--line);border-radius:4px;padding:7px 8px;color:var(--ink);font-family:inherit;font-size:11px}
+  .wf-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--hud)}
+  .wf-row input:focus{outline:none;border-color:var(--hud)}
+  .wf-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:2px}
+  .wf-save,.wf-cancel{padding:7px 14px;border-radius:4px;font-family:inherit;font-size:10px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .wf-save{border:1px solid var(--hud);background:rgba(var(--glow),.12);color:var(--hud)}
+  .wf-cancel{border:1px solid var(--line);background:transparent;color:var(--hud-dim)}
+  .wf-err{color:var(--crit);font-size:10px;min-height:12px}
   /* Homepage-style service tiles for containers */
   .svc{position:relative;display:flex;align-items:center;gap:10px;background:var(--card-fill);border:1px solid var(--line);
     border-radius:6px;padding:10px 11px;text-decoration:none;color:inherit;transition:border-color .12s,box-shadow .12s}
@@ -220,6 +251,7 @@
       <span id="dashtitle">GATEWAY DASHBOARD</span>
       <span id="dashupd"></span>
       <button id="dashspeed" title="run a WAN speedtest (saturates the link briefly)">SPEEDTEST</button>
+      <button id="dashwidget" title="add a service widget to this machine">+ WIDGET</button>
       <button id="dashrefresh" title="refresh now">REFRESH</button>
       <button id="dashopen" title="open the gateway's own UI in a new tab">OPEN UI ↗</button>
     </div>
@@ -350,7 +382,7 @@ function spaced(s){return (s||'').toUpperCase().split('').join(' ');}
 
 // ================= VIEW: topology <-> native gateway dashboard =================
 const viewtabs=document.getElementById('viewtabs'), mainEl=document.getElementById('main');
-let viewMode='topology', dashTimer=null, glTimer=null;
+let viewMode='topology', dashTimer=null, glTimer=null, wTimer=null;
 const loadOptIn=()=>{ try{return JSON.parse(localStorage.getItem('dashOptIn')||'{}');}catch(e){return {};} };
 let dashOptIn=loadOptIn();
 const saveOptIn=()=>{ try{localStorage.setItem('dashOptIn',JSON.stringify(dashOptIn));}catch(e){} };
@@ -366,19 +398,21 @@ function setView(mode){
   mainEl.classList.toggle('dashview',mode==='dashboard');
   document.getElementById('tabTopo').classList.toggle('active',mode==='topology');
   document.getElementById('tabDash').classList.toggle('active',mode==='dashboard');
-  if(mode!=='dashboard'){ clearInterval(dashTimer); dashTimer=null; clearInterval(glTimer); glTimer=null; }   // stop polling when hidden
+  if(mode!=='dashboard'){ clearInterval(dashTimer); dashTimer=null; clearInterval(glTimer); glTimer=null; clearInterval(wTimer); wTimer=null; }   // stop polling when hidden
 }
 function isNetwork(){ const t=TOPOS.find(x=>x.id===activeId); return (t&&t.kind==='network')||activeId==='network'; }
 function loadDash(){ return isNetwork()?loadGwDash():loadSvcDash(); }
 function openDash(){
-  setView('dashboard'); clearInterval(dashTimer); dashTimer=null; clearInterval(glTimer); glTimer=null;
+  setView('dashboard'); clearInterval(dashTimer); dashTimer=null; clearInterval(glTimer); glTimer=null; clearInterval(wTimer); wTimer=null;
   const net=isNetwork();
   document.getElementById('dashtitle').textContent=net?'GATEWAY DASHBOARD':'SERVICES & CONTAINERS';
   document.getElementById('dashspeed').style.display=net?'':'none';   // gateway-only controls
   document.getElementById('dashopen').style.display=net?'':'none';
+  document.getElementById('dashwidget').style.display=net?'none':'';  // service widgets: machine dashboards only
   loadDash();
   dashTimer=setInterval(loadDash, net?5000:15000);   // containers/services update slowly
-  if(!net){ loadGlances(); glTimer=setInterval(loadGlances, 4000); }   // Glances panel refreshes faster for live sparklines
+  if(!net){ loadGlances(); glTimer=setInterval(loadGlances, 4000);    // Glances panel refreshes faster for live sparklines
+            loadWidgets(); wTimer=setInterval(loadWidgets, 20000); }  // service widgets poll on their own slower cadence
 }
 // DASHBOARD tab: ask before generating one the first time, then remember the opt-in per topology
 document.getElementById('tabDash').onclick=()=>{
@@ -389,7 +423,8 @@ document.getElementById('tabDash').onclick=()=>{
   });
 };
 document.getElementById('tabTopo').onclick=()=>setView('topology');
-document.getElementById('dashrefresh').onclick=()=>{ loadDash(); if(!isNetwork()) loadGlances(); };
+document.getElementById('dashrefresh').onclick=()=>{ loadDash(); if(!isNetwork()){ loadGlances(); loadWidgets(); } };
+document.getElementById('dashwidget').onclick=()=>{ if(!isNetwork()) openWidgetCatalog(); };
 document.getElementById('dashopen').onclick=()=>{ const u=gatewayUrl(); if(u) window.open(u,'_blank','noopener'); else alert('No gateway address known for this topology.'); };
 document.getElementById('dashspeed').onclick=async()=>{
   const btn=document.getElementById('dashspeed'); btn.disabled=true;
@@ -641,7 +676,7 @@ function svcTile(c,hip){
 }
 function renderSvc(d){
   const p=document.getElementById('dashpanel');
-  [...p.children].forEach(c=>{ if(c.id!=='glpanel') c.remove(); });   // rebuild tiles, keep the live Glances panel
+  [...p.children].forEach(c=>{ if(c.id!=='glpanel'&&c.id!=='wpanel') c.remove(); });   // rebuild tiles, keep the live Glances + widget panels
   if(d.error){ const e=hel('div','dcard wide'); e.appendChild(hel('div','dl','No dashboard')); e.appendChild(hel('div','du',d.error)); p.appendChild(e); return; }
   const cons=d.containers||[], svcs=d.services||[];
   if(!cons.length && !svcs.length){
@@ -974,6 +1009,118 @@ function watchForHost(name,ip){
 }
 notice.querySelector('.nc-x').onclick=hideNotice;
 notice.addEventListener('click',e=>{ if(e.target===notice&&!notice.classList.contains('busy'))hideNotice(); });
+
+// ===== Widget Store: browsable service widgets on machine dashboards ==========
+// Server does every outbound API call + masks secrets; the browser only ever
+// sees stats + masked config. All service/label text goes in via textContent.
+let WCAT=null;                                                  // cached Type catalog
+async function widgetCatalog(){
+  if(WCAT) return WCAT;
+  try{ WCAT=await (await fetch('api/widget-catalog')).json(); }catch(e){ WCAT=[]; }
+  return Array.isArray(WCAT)?WCAT:(WCAT=[]);
+}
+function noticeEl(title,node){                                  // reuse the modal chrome, DOM body (no innerHTML)
+  notice.querySelector('.nc-title').textContent=title;
+  const b=notice.querySelector('.nc-body'); b.innerHTML=''; b.appendChild(node);
+  notice.classList.remove('busy'); notice.style.display='flex';
+}
+function widgetIcon(name){
+  if(!name) return null;
+  const img=document.createElement('img'); img.className='wc-ico'; img.alt=''; img.loading='lazy';
+  img.src='icon?name='+encodeURIComponent(name); img.onerror=()=>img.remove();
+  return img;
+}
+async function openWidgetCatalog(){
+  const cat=await widgetCatalog(), wrap=hel('div','wcat');
+  if(!cat.length) wrap.appendChild(hel('div','wc-empty','No widgets available.'));
+  cat.forEach(t=>{
+    const card=hel('button','wc-card'); card.type='button';
+    const ic=widgetIcon(t.icon); if(ic) card.appendChild(ic);
+    card.appendChild(hel('div','wc-name',t.label||t.id));
+    if(t.category) card.appendChild(hel('div','wc-cat',t.category));
+    if(t.desc) card.appendChild(hel('div','wc-desc',t.desc));
+    card.onclick=()=>openWidgetForm(t,null);
+    wrap.appendChild(card);
+  });
+  noticeEl('Add Widget',wrap);
+}
+// config form from a Type's field schema; `inst` = the existing widget when editing
+function openWidgetForm(type,inst){
+  const form=hel('form','wform'), inputs={};
+  (type.fields||[]).forEach(f=>{
+    const row=hel('label','wf-row'); row.appendChild(hel('span','wf-label',f.label||f.name));
+    let inp=document.createElement('input');
+    if(f.type==='bool'){ inp.type='checkbox'; if(inst&&inst.config&&inst.config[f.name]) inp.checked=true; }
+    else{
+      inp.type=(f.type==='password')?'password':(f.type==='number'?'number':'text');
+      if(inst&&inst.config&&inst.config[f.name]!=null&&f.type!=='password') inp.value=inst.config[f.name];
+      if(f.type==='password'&&inst&&inst.secret_set&&inst.secret_set[f.name]) inp.placeholder='•••••• (unchanged)';
+      if(f.required) inp.required=true;
+    }
+    inputs[f.name]=inp; row.appendChild(inp); form.appendChild(row);
+  });
+  const err=hel('div','wf-err'); form.appendChild(err);
+  const foot=hel('div','wf-foot');
+  const cancel=hel('button','wf-cancel','Cancel'); cancel.type='button'; cancel.onclick=hideNotice;
+  const save=hel('button','wf-save',inst?'Save':'Add'); save.type='submit';
+  foot.appendChild(cancel); foot.appendChild(save); form.appendChild(foot);
+  form.onsubmit=async e=>{
+    e.preventDefault(); save.disabled=true; err.textContent='';
+    const config={};
+    (type.fields||[]).forEach(f=>{ const inp=inputs[f.name];
+      if(f.type==='bool') config[f.name]=inp.checked;
+      else if(inp.value!=='') config[f.name]=inp.value;   // blank password -> omit, server keeps stored
+    });
+    try{
+      const [url,body]=inst
+        ? ['api/widget-update',{host:activeId,id:inst.id,config}]
+        : ['api/widget-add',{host:activeId,type:type.id,config}];
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+      hideNotice(); loadWidgets();
+    }catch(ex){ err.textContent=ex.message; save.disabled=false; }
+  };
+  noticeEl((inst?'Edit ':'Add ')+(type.label||type.id),form);
+}
+const wkLabel=k=>k.replace(/_/g,' ').replace(/\b\w/,c=>c.toUpperCase());   // block_pct -> "Block pct"
+function wvFmt(k,v){
+  if(v==null) return '—';
+  if(/_bps$/.test(k)) return fmtBytes(v);
+  if(/_pct$|^pct$/.test(k)) return (Math.round(v*10)/10)+'%';
+  if(v===true) return 'yes'; if(v===false) return 'no';
+  if(typeof v==='number') return v.toLocaleString();
+  return String(v);
+}
+function widgetPanel(w,type){
+  const card=hel('div','wcard'), head=hel('div','whead');
+  const ic=widgetIcon(type&&type.icon); if(ic) head.appendChild(ic);
+  head.appendChild(hel('span','wh-name',(type&&type.label)||w.type));
+  const edit=hel('button','wh-btn','⚙'); edit.type='button'; edit.title='edit'; edit.onclick=()=>{ if(type) openWidgetForm(type,w); };
+  const del=hel('button','wh-btn','×'); del.type='button'; del.title='remove'; del.onclick=()=>removeWidget(w);
+  head.appendChild(edit); head.appendChild(del); card.appendChild(head);
+  const body=hel('div','wbody'), data=w.data||{}, keys=Object.keys(data);
+  if(!keys.length) body.appendChild(hel('div','wb-empty','No data — check the widget’s URL / credentials.'));
+  else keys.forEach(k=>{ const r=hel('div','wrow'); r.appendChild(hel('span','wk',wkLabel(k))); r.appendChild(hel('span','wv',wvFmt(k,data[k]))); body.appendChild(r); });
+  card.appendChild(body); return card;
+}
+function removeWidget(w){
+  confirmNotice('Remove widget','Remove this '+w.type+' widget?',async()=>{
+    try{ await fetch('api/widget-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:activeId,id:w.id})}); }catch(e){}
+    hideNotice(); loadWidgets();
+  });
+}
+async function loadWidgets(){
+  if(viewMode!=='dashboard'||isNetwork()||!activeId) return;
+  let list; try{ list=await (await fetch('api/widgets?host='+encodeURIComponent(activeId)+'&_='+Date.now())).json(); }catch(e){ return; }
+  const p=document.getElementById('dashpanel'); if(!p) return;
+  let wp=document.getElementById('wpanel');
+  if(!Array.isArray(list)||!list.length){ if(wp) wp.remove(); return; }
+  const cat=await widgetCatalog(), byId={}; cat.forEach(t=>byId[t.id]=t);
+  const fresh=hel('div','wpanel'); fresh.id='wpanel';
+  list.forEach(w=>fresh.appendChild(widgetPanel(w,byId[w.type])));
+  if(wp){ p.replaceChild(fresh,wp); }
+  else{ const gl=document.getElementById('glpanel'); p.insertBefore(fresh, gl?gl.nextSibling:p.firstChild); }
+}
 async function scanHost(name,ip){
   showNotice('Scanning '+name,`Contacting <b>${esc(ip)}</b> over SSH — this can take a few seconds…`,true);
   let data={};
