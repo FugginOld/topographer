@@ -32,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)           # repo root (agent/ -> ..)
 sys.path.insert(0, ROOT)
 from core import local_telemetry as _tele   # noqa: E402  same sampler topo_server.py uses
+from core import glances as _glances         # noqa: E402  Glances reader/installer
 
 GENERATOR = "make_pc_topo.py" if sys.platform.startswith("win") else "make_linux_topo.py"
 
@@ -83,7 +84,20 @@ def push_services(server: str, tid: str, token: str) -> None:
         print("services push failed:", e)
 
 
-def report(server: str, name: str, token: str, interval: float, topo_every: float) -> None:
+def push_glances(server: str, tid: str, token: str) -> None:
+    """Push this host's local Glances metrics so its dashboard shows the panel.
+    Best-effort — no Glances (e.g. Windows, or install/launch failed) just means
+    no panel, exactly as before."""
+    try:
+        g = _glances.fetch()
+        if g.get("cpu") is not None:
+            _post(server, "/api/ingest-glances", {"host": tid, **g}, token, timeout=10)
+    except Exception as e:
+        print("glances push failed:", e)
+
+
+def report(server: str, name: str, token: str, interval: float, topo_every: float,
+           glances_install: bool = True) -> None:
     """Daemon: push topology, then push live telemetry every `interval` seconds,
     re-scanning the topology every `topo_every` seconds."""
     try:
@@ -98,12 +112,14 @@ def report(server: str, name: str, token: str, interval: float, topo_every: floa
         sys.exit(f"could not reach {server}: {e}  (is topo_server.py running? firewall open on 8770?)")
     print(f"reporting '{name}' (id={tid}) to {server} every {interval}s; Ctrl-C to stop")
     push_services(server, tid, token)               # initial container/service snapshot
+    _glances.ensure(install=glances_install)        # install + launch Glances on Linux (no-op elsewhere)
     last_topo = time.monotonic()
     while True:
         try:
             _post(server, "/api/telemetry", {"host": tid, **_tele.sample()}, token, timeout=10)
         except Exception as e:      # keep the loop alive across transient failures
             print("telemetry push failed:", e)
+        push_glances(server, tid, token)            # live system-metrics panel for this host
         if time.monotonic() - last_topo >= topo_every:
             try:
                 push(server, generate(name), token)
@@ -124,10 +140,13 @@ def main() -> None:
                     help="stay running: push live telemetry on an interval (per-host HUD)")
     ap.add_argument("--interval", type=float, default=3.0, help="telemetry push seconds (--report)")
     ap.add_argument("--topo-every", type=float, default=300.0, help="re-scan topology seconds (--report)")
+    ap.add_argument("--no-glances-install", action="store_true",
+                    help="don't pip-install Glances; only launch it if already present (--report)")
     args = ap.parse_args()
 
     if args.report:
-        return report(args.server, args.name, args.token, args.interval, args.topo_every)
+        return report(args.server, args.name, args.token, args.interval, args.topo_every,
+                      glances_install=not args.no_glances_install)
 
     if args.file:
         with open(args.file, encoding="utf-8") as fh:

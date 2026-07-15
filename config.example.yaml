@@ -101,9 +101,11 @@ dns:
   # pihole_url: http://10.0.10.5/admin
   # pihole_token: "CHANGEME"
 
-# glances: system-metrics widget on a machine's Services dashboard. Point it at a
-# Glances instance's REST API (default port 61208). Only the dashboard host's own
-# Glances is shown for now. Run Glances with:  glances -w   (web/REST server mode)
+# glances: system-metrics widget on a machine's Services dashboard. This block is
+# only for the DASHBOARD HOST's own panel — point it at its local Glances REST API
+# (default port 61208; run  glances -w). Remote Linux hosts running the reporting
+# agent need no config here: the agent installs + launches Glances and pushes their
+# metrics automatically (like telemetry/services).
 glances:
   enabled: false
   url: http://localhost:61208

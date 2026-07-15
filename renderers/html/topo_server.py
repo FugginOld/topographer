@@ -45,6 +45,7 @@ INGEST_TOKEN = os.environ.get("TOPO_TOKEN", "")   # optional shared secret for /
 # self-contained. Extra files on the other OS are a few harmless KB.
 AGENT_PATHS = ["agent", "scanners/make_linux_topo.py", "scanners/make_pc_topo.py",
                "scanners/scan_services.py", "core/__init__.py", "core/local_telemetry.py",
+               "core/glances.py",
                "renderers/__init__.py", "renderers/card.py"]
 
 
@@ -262,116 +263,29 @@ def icon_bytes(name: str, image: str):
     return None
 
 
-# ── Glances widget: proxy a Glances REST API (its API sends no CORS headers, so
-# the browser can't read it directly) into a compact system-metrics card. Only
-# the dashboard host's own Glances for now; enable in config.yaml:
+# ── Glances widget: a compact system-metrics tile grid. The dashboard's own
+# machine is proxied from its local Glances REST API (config.yaml glances block,
+# since that API sends no CORS headers the browser can't read it directly). A
+# remote host serves whatever its reporting agent last pushed — push model, like
+# telemetry/services, so remote Linux hosts light up with no per-host config.
 #   glances: {enabled: true, url: "http://localhost:61208", version: 4}
 _glances_cache = {"t": 0.0, "data": {}}
-
-
-def _gl_get(base: str, ver, path: str):
-    import urllib.request
-    with urllib.request.urlopen(f"{base}/api/{ver}/{path}", timeout=3) as r:
-        return json.loads(r.read())
-
-
-def _gb(b):
-    return round(b / 1073741824, 1) if isinstance(b, (int, float)) else None
-
-
-def _rate(d: dict, rate_key: str, delta_key: str) -> float:
-    """bytes/sec: prefer Glances' *_rate_per_sec, else delta-over-interval."""
-    r = d.get(rate_key)
-    if isinstance(r, (int, float)):
-        return float(r)
-    delta, dt = d.get(delta_key), d.get("time_since_update")
-    if isinstance(delta, (int, float)) and isinstance(dt, (int, float)) and dt > 0:
-        return delta / dt
-    return 0.0
-
-
-def _gl_mem(d):
-    return {"percent": round(d.get("percent", 0)), "total_gb": _gb(d.get("total")),
-            "used_gb": _gb(d.get("used")), "free_gb": _gb(d.get("free"))}
-
-
-def _gl_system(d):
-    return {"hostname": d.get("hostname", ""), "distro": d.get("linux_distro") or d.get("os_name", ""),
-            "kernel": d.get("os_version", "")}
-
-
-def _gl_net(nets):
-    """busiest up interface -> {iface, tx_bps, rx_bps}, skipping loopback/virtual."""
-    best, score = None, -1.0
-    for n in nets or []:
-        name = n.get("interface_name", "")
-        if not n.get("is_up", True) or name == "lo" or name.startswith(("veth", "br-", "docker")):
-            continue
-        tx, rx = _rate(n, "bytes_sent_rate_per_sec", "tx"), _rate(n, "bytes_recv_rate_per_sec", "rx")
-        if tx + rx >= score:
-            best, score = {"iface": name, "tx_bps": tx, "rx_bps": rx}, tx + rx
-    return best
-
-
-def _gl_disk(disks):
-    rd = wr = 0.0
-    for d in disks or []:
-        rd += _rate(d, "read_bytes_rate_per_sec", "read_bytes")
-        wr += _rate(d, "write_bytes_rate_per_sec", "write_bytes")
-    return {"read_bps": rd, "write_bps": wr}
-
-
-def _gl_sensor(sensors):
-    """CPU temp with warn/crit thresholds; prefer a package/cpu/core label, else hottest."""
-    cands = [s for s in sensors or []
-             if str(s.get("unit", "")).upper() == "C" and isinstance(s.get("value"), (int, float))]
-    if not cands:
-        return None
-    pref = [s for s in cands if re.search(r"package|cpu|tctl|core|coretemp", str(s.get("label", "")), re.I)]
-    s = max(pref or cands, key=lambda x: x["value"])
-    return {"value": round(s["value"]), "warn": s.get("warning"), "crit": s.get("critical")}
-
-
-def _gl_procs(plist):
-    """top 5 processes by CPU -> [{name, cpu, mem_mb}]."""
-    def cpu(p): return p.get("cpu_percent") or 0
-    out = []
-    for p in sorted(plist or [], key=cpu, reverse=True)[:5]:
-        nm = p.get("name") or ((p.get("cmdline") or [""])[0])
-        mi = p.get("memory_info")
-        rss = mi.get("rss") if isinstance(mi, dict) else (mi[0] if isinstance(mi, (list, tuple)) and mi else None)
-        out.append({"name": str(nm)[:24], "cpu": round(cpu(p), 1),
-                    "mem_mb": round(rss / 1048576) if isinstance(rss, (int, float)) else None})
-    return out
-
-
-def _glances_fetch(base: str, ver) -> dict:
-    try:
-        ql = _gl_get(base, ver, "quicklook")             # cpu/mem/swap % in one call
-    except Exception:
-        return {}                                        # unreachable or wrong API version
-    out = {"cpu": round(ql.get("cpu", 0)), "cpu_name": ql.get("cpu_name", "")}
-    for key, path, fn in (("mem", "mem", _gl_mem), ("system", "system", _gl_system),
-                          ("net", "network", _gl_net), ("diskio", "diskio", _gl_disk),
-                          ("temp", "sensors", _gl_sensor), ("procs", "processlist", _gl_procs)):
-        try:
-            v = fn(_gl_get(base, ver, path))
-            if v is not None:
-                out[key] = v
-        except Exception:
-            pass                                         # optional section; skip on miss
-    return out
+_host_gl: dict[str, dict] = {}     # host id -> {"t": monotonic, "data": compact metrics}
+GL_FRESH = 15.0                    # seconds a pushed sample stays "live"
 
 
 def glances_stats(host_id: str) -> dict:
-    cfg = _cfg_block("glances")
-    if not cfg.get("enabled") or (host_id and _is_remote(host_id)):
-        return {}                                        # off, or a remote host (not wired yet)
+    if host_id and _is_remote(host_id):                  # remote host: serve its agent's push
+        h = _host_gl.get(store.stable_slug(host_id))
+        if h and time.monotonic() - h["t"] < GL_FRESH:
+            return {**h["data"], "live": True}
+        return {**h["data"], "stale": True} if h else {}
+    cfg = _cfg_block("glances")                          # this machine: proxy its local Glances
+    if not cfg.get("enabled"):
+        return {}
     if time.monotonic() - _glances_cache["t"] < 2.0:
         return _glances_cache["data"]
-    base = (cfg.get("url") or "http://localhost:61208").rstrip("/")
-    ver = cfg.get("version", 4)
-    data = _glances_fetch(base, ver) or (_glances_fetch(base, 3) if ver != 3 else {})   # old Glances speaks /api/3
+    data = glances.fetch(cfg.get("url") or glances.DEFAULT_URL, cfg.get("version", 4))
     _glances_cache.update(t=time.monotonic(), data=data)
     return data
 
@@ -475,6 +389,7 @@ def generate_network(subnet: str | None = None) -> dict:
 
 sys.path.insert(0, ROOT)    # repo root — where core/ and the scanners live
 from core import local_telemetry as _tele   # noqa: E402  shared local-metrics sampler
+from core import glances                     # noqa: E402  Glances reader (also used by the agent)
 
 _tele_cache = {"t": 0.0, "data": dict(_tele.ZERO)}
 _host_tele: dict[str, dict] = {}   # host id -> {"t": monotonic, "data": {...}}
@@ -638,6 +553,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self._send(400, {"error": "missing host"})
                 _host_svc[hid] = {"t": time.monotonic(),
                                   "data": {k: b.get(k) for k in ("engine", "containers", "services")}}
+                return self._send(200, {"ok": True, "host": hid})
+            if self.path == "/api/ingest-glances":
+                if INGEST_TOKEN and self.headers.get("X-Token") != INGEST_TOKEN:
+                    return self._send(403, {"error": "bad or missing token"})
+                b = self._body()
+                hid = store.stable_slug(b.get("host", ""))
+                if not hid:
+                    return self._send(400, {"error": "missing host"})
+                data = {k: v for k, v in b.items() if k != "host"}   # the compact metrics dict
+                _host_gl[hid] = {"t": time.monotonic(), "data": data}
                 return self._send(200, {"ok": True, "host": hid})
         except Exception as e:
             return self._send(500, {"error": str(e)})
