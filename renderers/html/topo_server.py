@@ -262,6 +262,51 @@ def icon_bytes(name: str, image: str):
     return None
 
 
+# ── Glances widget: proxy a Glances REST API (its API sends no CORS headers, so
+# the browser can't read it directly) into a compact system-metrics card. Only
+# the dashboard host's own Glances for now; enable in config.yaml:
+#   glances: {enabled: true, url: "http://localhost:61208", version: 4}
+_glances_cache = {"t": 0.0, "data": {}}
+
+
+def _gl_get(base: str, ver, path: str):
+    import urllib.request
+    with urllib.request.urlopen(f"{base}/api/{ver}/{path}", timeout=3) as r:
+        return json.loads(r.read())
+
+
+def _glances_fetch(base: str, ver) -> dict:
+    try:
+        ql = _gl_get(base, ver, "quicklook")             # cpu/mem/swap % in one call
+    except Exception:
+        return {}                                        # unreachable or wrong API version
+    out = {"cpu": round(ql.get("cpu", 0)), "mem": round(ql.get("mem", 0)),
+           "swap": round(ql.get("swap", 0)), "cpu_name": ql.get("cpu_name", "")}
+    try:    out["load"] = _gl_get(base, ver, "load").get("min1")
+    except Exception: pass
+    try:    out["uptime"] = _gl_get(base, ver, "uptime")            # v4 returns "N days, h:m:s"
+    except Exception: pass
+    try:                                                           # hottest °C sensor
+        temps = [s.get("value") for s in _gl_get(base, ver, "sensors")
+                 if str(s.get("unit", "")).upper() == "C" and isinstance(s.get("value"), (int, float))]
+        if temps: out["temp"] = round(max(temps))
+    except Exception: pass
+    return out
+
+
+def glances_stats(host_id: str) -> dict:
+    cfg = _cfg_block("glances")
+    if not cfg.get("enabled") or (host_id and _is_remote(host_id)):
+        return {}                                        # off, or a remote host (not wired yet)
+    if time.monotonic() - _glances_cache["t"] < 2.0:
+        return _glances_cache["data"]
+    base = (cfg.get("url") or "http://localhost:61208").rstrip("/")
+    ver = cfg.get("version", 4)
+    data = _glances_fetch(base, ver) or (_glances_fetch(base, 3) if ver != 3 else {})   # old Glances speaks /api/3
+    _glances_cache.update(t=time.monotonic(), data=data)
+    return data
+
+
 def scan_host(host: str, name: str) -> dict:
     """SSH into a Linux host, run the hardware scanner over the pipe, ingest the
     result as a machine card. Raises with the agent fallback if SSH isn't set up."""
@@ -456,6 +501,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             q = parse_qs(urlparse(self.path).query)
             ic = icon_bytes(q.get("name", [""])[0], q.get("image", [""])[0])
             return self._send_bytes(*ic) if ic else self._send(404, {"error": "no icon"})
+        if self.path.split("?")[0] == "/api/glances":
+            host = parse_qs(urlparse(self.path).query).get("host", [""])[0]
+            try:
+                return self._send(200, glances_stats(host))
+            except Exception as e:
+                return self._send(200, {"error": str(e)})
         if self.path.startswith("/t/"):
             tid = os.path.basename(self.path.split("?")[0])[:-5]  # strip .json
             try:

@@ -148,6 +148,11 @@
   .svc-name{font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .svc-sub{font-size:9px;color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
   .svc-stat{font-size:8.5px;color:var(--hud);letter-spacing:.03em;font-variant-numeric:tabular-nums;opacity:.85}
+  .gl-row{display:flex;align-items:center;gap:9px;font-size:9.5px;padding:2px 0}
+  .gl-lbl{flex:0 0 34px;color:var(--hud-dim);letter-spacing:.1em}
+  .gl-track{flex:1;height:6px;border-radius:3px;background:var(--bar-bg);overflow:hidden}
+  .gl-fill{height:100%;background:var(--hud);border-radius:3px;transition:width .4s}
+  .gl-val{flex:0 0 auto;min-width:34px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
   .svc-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#45c46b;box-shadow:0 0 8px rgba(69,196,107,.6)}
   .svc.down .svc-dot{background:var(--crit);box-shadow:none}
   .svc-group{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;font-size:9px;letter-spacing:.16em;
@@ -460,11 +465,31 @@ function renderGwDash(d){
 // machine dashboard: containers / compose stacks / running services, scanned over SSH
 async function loadSvcDash(){
   try{
-    const r=await fetch('api/services?host='+encodeURIComponent(activeId)+'&_='+Date.now());
-    const d=await r.json();
-    renderSvc(d);
+    const q='host='+encodeURIComponent(activeId)+'&_='+Date.now();
+    const [sr,gr]=await Promise.all([fetch('api/services?'+q),fetch('api/glances?'+q)]);
+    const d=await sr.json();
+    let g={}; try{ g=await gr.json(); }catch(e){}     // Glances is optional
+    renderSvc(d,g);
     document.getElementById('dashupd').textContent=d.error?'':('updated '+new Date().toLocaleTimeString()+(d.stale?' (last known)':''));
   }catch(e){ renderSvc({error:'could not reach the dashboard API.'}); document.getElementById('dashupd').textContent=''; }
+}
+// Glances system widget: labeled CPU/MEM/SWAP bars + load/temp/uptime
+function glBar(label,pct){
+  const row=hel('div','gl-row'); row.appendChild(hel('span','gl-lbl',label));
+  const track=hel('div','gl-track'), fill=hel('div','gl-fill');
+  fill.style.width=Math.max(0,Math.min(100,pct))+'%';
+  if(pct>=90) fill.style.background='var(--crit)';
+  track.appendChild(fill); row.appendChild(track);
+  row.appendChild(hel('span','gl-val',Math.round(pct)+'%')); return row;
+}
+function glancesCard(g){
+  const c=hel('div','dcard wide');
+  c.appendChild(hel('div','dl','System · Glances'+(g.cpu_name?' · '+g.cpu_name:'')));
+  c.appendChild(glBar('CPU',g.cpu)); c.appendChild(glBar('MEM',g.mem));
+  if(g.swap!=null) c.appendChild(glBar('SWAP',g.swap));
+  const meta=[]; if(g.load!=null)meta.push('load '+g.load); if(g.temp!=null)meta.push(g.temp+'°C'); if(g.uptime)meta.push('up '+g.uptime);
+  if(meta.length) c.appendChild(hel('div','du',meta.join('   ·   ')));
+  return c;
 }
 // derive a Homepage-style tile from one container
 const shortImg=img=>img?((img.split('/').pop()||img).split(':')[0]):'';
@@ -502,8 +527,9 @@ function svcTile(c,hip){
   const dot=hel('span','svc-dot'); dot.title=c.status||c.state||''; el.appendChild(dot);
   return el;
 }
-function renderSvc(d){
+function renderSvc(d,glances){
   const p=document.getElementById('dashpanel'); p.innerHTML='';
+  if(glances&&glances.cpu!=null) p.appendChild(glancesCard(glances));   // system widget on top when configured
   if(d.error){ const e=hel('div','dcard wide'); e.appendChild(hel('div','dl','No dashboard')); e.appendChild(hel('div','du',d.error)); p.appendChild(e); return; }
   const cons=d.containers||[], svcs=d.services||[];
   if(!cons.length && !svcs.length){
