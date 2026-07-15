@@ -476,12 +476,13 @@ function webuiUrl(webui,hip,port){
     if(/^https?:\/\//i.test(u)) return u; }
   return (hip&&port)?`http://${hip}:${port}`:null;
 }
-// icon sources tried in order: Unraid icon label → service favicon → monogram badge
+// icon sources, best first: Unraid icon label → dashboard-icons (our server cache)
+// → the service's own favicon → monogram badge
 function svcIcon(c,hip,port,down){
   const badge=hel('div','svc-ico',mono(c.name)), srcs=[];
   if(c.icon) srcs.push(c.icon);                                 // Unraid net.unraid.docker.icon
+  srcs.push('icon?name='+encodeURIComponent(c.name||'')+'&image='+encodeURIComponent(c.image||''));
   if(!down&&hip&&port) srcs.push(`http://${hip}:${port}/favicon.ico`);
-  if(!srcs.length) return badge;
   const img=document.createElement('img'); img.className='svc-ico'; img.alt=''; img.loading='lazy';
   let i=0; img.src=srcs[0];
   img.onerror=()=>{ i++; i<srcs.length ? img.src=srcs[i] : img.replaceWith(badge); };
