@@ -8,9 +8,9 @@ and its web/REST server run on this Linux host, installing it if missing.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -132,11 +132,19 @@ def _reachable(base: str, ver=4) -> bool:
     return False
 
 
-def ensure(base: str = DEFAULT_URL, ver=4, install: bool = True) -> bool:
+def _installed() -> bool:
+    return importlib.util.find_spec("glances") is not None
+
+
+def ensure(base: str = DEFAULT_URL, ver=4, install: bool = True, log=lambda m: None) -> bool:
     """Linux only: make sure a Glances web/REST server answers at `base`,
-    installing Glances (unless install=False) and launching `glances -w` if needed.
+    installing Glances (unless install=False) and launching it if needed.
     Best-effort — returns True iff reachable afterward, so callers can just skip
-    pushing on False.
+    pushing on False. `log` (e.g. print) receives one-line status notes.
+
+    Detects/launches via the CURRENT interpreter (find_spec + `python -m glances`),
+    never the `glances` console script — a `pip --user` install lands in
+    ~/.local/bin, which isn't on PATH under systemd/cron, so `which glances` lies.
 
     ponytail: pip --user install; if a distro forbids it (PEP 668) or prefers apt,
     install glances by hand once and this becomes a no-op (it only launches).
@@ -145,29 +153,38 @@ def ensure(base: str = DEFAULT_URL, ver=4, install: bool = True) -> bool:
         return _reachable(base, ver)                     # server-managed elsewhere
     if _reachable(base, ver):
         return True
-    if shutil.which("glances") is None:
+    if not _installed():
         if not install:
-            return False                                 # not installed and told not to
-
+            log("glances: not installed (--no-glances-install set); skipping")
+            return False
+        log("glances: installing (pip --user glances[web])…")
+        err = ""
         for cmd in ([sys.executable, "-m", "pip", "install", "--user", "glances[web]"],
                     [sys.executable, "-m", "pip", "install", "--user", "--break-system-packages", "glances[web]"]):
             try:
-                if subprocess.run(cmd, capture_output=True, text=True, timeout=300).returncode == 0:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                if r.returncode == 0:
                     break
-            except Exception:
-                pass
-        if shutil.which("glances") is None:
-            return False                                 # give up; panel just stays empty
+                err = (r.stderr or r.stdout or "")
+            except Exception as e:
+                err = str(e)
+        if not _installed():
+            log(f"glances: install failed — {err.strip()[-300:]}")
+            return False
     try:                                                 # detached web server; survives us
-        subprocess.Popen(["glances", "-w"], stdout=subprocess.DEVNULL,
+        subprocess.Popen([sys.executable, "-m", "glances", "-w"], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
-    except Exception:
+    except Exception as e:
+        log(f"glances: launch failed — {e}")
         return False
-    for _ in range(20):                                  # give Bottle/uvicorn up to ~10s to bind
+    log("glances: launched web server, waiting for it to bind…")
+    for _ in range(20):                                  # give the web server up to ~10s to bind
         if _reachable(base, ver):
+            log("glances: web server up")
             return True
         time.sleep(0.5)
-    return _reachable(base, ver)
+    log("glances: web server did not answer after ~10s")
+    return False
 
 
 if __name__ == "__main__":   # smoke test: parse a canned quicklook shape offline

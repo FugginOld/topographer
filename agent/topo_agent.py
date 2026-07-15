@@ -112,7 +112,7 @@ def report(server: str, name: str, token: str, interval: float, topo_every: floa
         sys.exit(f"could not reach {server}: {e}  (is topo_server.py running? firewall open on 8770?)")
     print(f"reporting '{name}' (id={tid}) to {server} every {interval}s; Ctrl-C to stop")
     push_services(server, tid, token)               # initial container/service snapshot
-    _glances.ensure(install=glances_install)        # install + launch Glances on Linux (no-op elsewhere)
+    _glances.ensure(install=glances_install, log=print)   # install + launch Glances on Linux (no-op elsewhere)
     last_topo = time.monotonic()
     while True:
         try:
