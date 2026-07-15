@@ -132,22 +132,62 @@ def _reachable(base: str, ver=4) -> bool:
     return False
 
 
+# Glances 4's REST web server pulls these in; distro packages (e.g. Debian's
+# python3-glances) split them out, so `import glances` succeeds but `-w` dies on a
+# missing jinja2/fastapi/uvicorn. We complete the set rather than second-guess it.
+_WEB_DEPS = ("fastapi", "uvicorn", "jinja2")
+
+
 def _installed() -> bool:
     return importlib.util.find_spec("glances") is not None
 
 
+def _web_ready() -> bool:
+    return all(importlib.util.find_spec(m) for m in _WEB_DEPS)
+
+
+def _pip_install(log, *pkgs) -> bool:
+    """pip --user, retrying with --break-system-packages for PEP 668 distros."""
+    err = ""
+    for extra in ([], ["--break-system-packages"]):
+        cmd = [sys.executable, "-m", "pip", "install", "--user", *extra, *pkgs]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if r.returncode == 0:
+                return True
+            err = r.stderr or r.stdout or ""
+        except Exception as e:
+            err = str(e)
+    log(f"glances: pip install {' '.join(pkgs)} failed — {err.strip()[-200:]}")
+    return False
+
+
+def _launch(base: str, ver, log) -> bool:
+    try:                                                 # detached web server; survives us
+        subprocess.Popen([sys.executable, "-m", "glances", "-w"], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
+    except Exception as e:
+        log(f"glances: launch failed — {e}")
+        return False
+    for _ in range(20):                                  # give the web server up to ~10s to bind
+        if _reachable(base, ver):
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def ensure(base: str = DEFAULT_URL, ver=4, install: bool = True, log=lambda m: None) -> bool:
     """Linux only: make sure a Glances web/REST server answers at `base`,
-    installing Glances (unless install=False) and launching it if needed.
-    Best-effort — returns True iff reachable afterward, so callers can just skip
-    pushing on False. `log` (e.g. print) receives one-line status notes.
+    installing Glances + its web deps (unless install=False) and launching it if
+    needed. Best-effort — returns True iff reachable afterward, so callers can just
+    skip pushing on False. `log` (e.g. print) receives one-line status notes.
 
     Detects/launches via the CURRENT interpreter (find_spec + `python -m glances`),
     never the `glances` console script — a `pip --user` install lands in
     ~/.local/bin, which isn't on PATH under systemd/cron, so `which glances` lies.
 
-    ponytail: pip --user install; if a distro forbids it (PEP 668) or prefers apt,
-    install glances by hand once and this becomes a no-op (it only launches).
+    ponytail: pip --user install; if a distro forbids it (PEP 668) install the
+    package(s) by hand once (apt python3-jinja2 etc.) and this becomes launch-only.
     """
     if not sys.platform.startswith("linux"):
         return _reachable(base, ver)                     # server-managed elsewhere
@@ -158,32 +198,21 @@ def ensure(base: str = DEFAULT_URL, ver=4, install: bool = True, log=lambda m: N
             log("glances: not installed (--no-glances-install set); skipping")
             return False
         log("glances: installing (pip --user glances[web])…")
-        err = ""
-        for cmd in ([sys.executable, "-m", "pip", "install", "--user", "glances[web]"],
-                    [sys.executable, "-m", "pip", "install", "--user", "--break-system-packages", "glances[web]"]):
-            try:
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-                if r.returncode == 0:
-                    break
-                err = (r.stderr or r.stdout or "")
-            except Exception as e:
-                err = str(e)
+        _pip_install(log, "glances[web]")
         if not _installed():
-            log(f"glances: install failed — {err.strip()[-300:]}")
+            return False                                 # _pip_install already logged why
+    if not _web_ready():                                 # installed, but -w can't serve
+        missing = [m for m in _WEB_DEPS if not importlib.util.find_spec(m)]
+        if not install:
+            log(f"glances: web deps missing {missing} and --no-glances-install set; skipping")
             return False
-    try:                                                 # detached web server; survives us
-        subprocess.Popen([sys.executable, "-m", "glances", "-w"], stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
-    except Exception as e:
-        log(f"glances: launch failed — {e}")
-        return False
-    log("glances: launched web server, waiting for it to bind…")
-    for _ in range(20):                                  # give the web server up to ~10s to bind
-        if _reachable(base, ver):
-            log("glances: web server up")
-            return True
-        time.sleep(0.5)
-    log("glances: web server did not answer after ~10s")
+        log(f"glances: installing missing web deps {missing}…")
+        _pip_install(log, *missing)
+    log("glances: launching web server…")
+    if _launch(base, ver, log):
+        log("glances: web server up")
+        return True
+    log("glances: web server not answering — run `python3 -m glances -w` by hand to see why")
     return False
 
 
