@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PC fabric dashboard</title>
+<title>Topographer</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="favicon-16.png" sizes="16x16" type="image/png">
@@ -31,7 +31,10 @@
 
   /* SIDEBAR */
   #sidebar{flex:0 0 250px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel);z-index:8}
-  #sidebar .head{padding:18px 16px 12px;border-bottom:1px solid var(--line)}
+  #sidebar .head{padding:18px 16px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px}
+  #sidebar .head .brand{width:30px;height:30px;flex:0 0 auto;filter:drop-shadow(0 0 6px rgba(var(--glow),.35))}
+  #sidebar .head .brand .ring{fill:none;stroke:var(--hud)}     /* contour rings follow the skin */
+  #sidebar .head .brand .core{fill:#4CC6C6}                    /* teal core stays brand-constant */
   #sidebar .head h2{font-size:12px;letter-spacing:.24em;color:var(--hud);text-shadow:0 0 10px rgba(var(--glow),.4)}
   #sidebar .head .sub{font-size:8.5px;color:var(--hud-dim);letter-spacing:.12em;margin-top:5px}
   #addbtn,#netbtn{margin:12px 14px;padding:9px 8px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
@@ -141,7 +144,10 @@
 <body>
 
 <aside id="sidebar">
-  <div class="head"><h2>TOPOLOGY MAPS</h2><div class="sub">pc hardware fabric maps</div></div>
+  <div class="head">
+    <svg class="brand" viewBox="0 0 512 512" aria-hidden="true"><defs><path id="tb" d="M0,-50 C26,-49 49,-27 48,2 C47,29 25,49 -3,48 C-31,47 -49,26 -48,-4 C-47,-31 -27,-50 0,-50 Z"/></defs><use href="#tb" class="ring" transform="translate(256,256) scale(3.05)" style="stroke-width:7.5"/><use href="#tb" class="ring" transform="translate(268,262) scale(1.5)" style="stroke-width:15"/><circle class="core" cx="272" cy="266" r="52"/></svg>
+    <div><h2>TOPOGRAPHER</h2><div class="sub">hardware &amp; network fabric maps</div></div>
+  </div>
   <button id="addbtn">+ Generate Current Machine</button>
   <button id="netbtn">⊹ Scan Network</button>
   <div id="list"></div>
@@ -260,7 +266,7 @@ async function selectTopo(id){
     if(!r.ok) throw new Error('HTTP '+r.status);
     TOPO=await r.json();
     document.getElementById('err').style.display='none';
-    document.getElementById('title').innerHTML=spaced(TOPO.name||'PC FABRIC');
+    document.getElementById('title').innerHTML=spaced(TOPO.name||'TOPOGRAPHER');
     document.getElementById('subtitle').textContent=(TOPO.nodes||[]).length+' modules · PCIe fabric · simulated telemetry';
     laidOut=false; layout(); fit();
     setView('topology'); viewtabs.style.display='flex';   // reset to Topology on every switch
