@@ -131,6 +131,10 @@ def report(server: str, name: str, token: str, interval: float, topo_every: floa
 
 
 def main() -> None:
+    try:
+        sys.stdout.reconfigure(line_buffering=True)   # else systemd block-buffers our status lines out of the journal
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--server", required=True, help="dashboard base URL, e.g. http://dash.lan:8770")
     ap.add_argument("--name", default=socket.gethostname())

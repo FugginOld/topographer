@@ -45,6 +45,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 need=""
 { have curl || have wget; } || need="$need curl"             # fetches the agent files
 have python3 || need="$need python3"
+python3 -m pip --version >/dev/null 2>&1 || need="$need python3-pip"  # agent self-installs Glances via pip
 have lsblk   || need="$need util-linux"                        # storage enumeration
 [ -n "$(ls -A /sys/bus/pci/devices 2>/dev/null)" ] && ! have lspci && need="$need pciutils"  # PCI names; skip on a Pi
 case "$(uname -m)" in x86_64|i?86) have dmidecode || need="$need dmidecode";; esac  # SMBIOS is x86-only

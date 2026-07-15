@@ -136,8 +136,21 @@ def _installed() -> bool:
     return importlib.util.find_spec("glances") is not None
 
 
+def _has_pip() -> bool:
+    return subprocess.run([sys.executable, "-m", "pip", "--version"],
+                          capture_output=True).returncode == 0
+
+
 def _pip_install(log, *pkgs) -> bool:
     """pip --user, retrying with --break-system-packages for PEP 668 distros."""
+    if not _has_pip():                                    # Debian ships pip separately (python3-pip)
+        try:                                             # unprivileged self-heal; often absent too
+            subprocess.run([sys.executable, "-m", "ensurepip", "--user"], capture_output=True, timeout=120)
+        except Exception:
+            pass
+        if not _has_pip():
+            log("glances: pip unavailable — install it on this host (apt install python3-pip); skipping")
+            return False
     err = ""
     for extra in ([], ["--break-system-packages"]):
         cmd = [sys.executable, "-m", "pip", "install", "--user", *extra, *pkgs]
