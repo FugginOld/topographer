@@ -61,6 +61,11 @@ extracted `<script>` block.
 
 - **Pushes go straight to `main`** — there is no feature-branch / PR flow. Commit only when asked, and
   end commit messages with the `Co-Authored-By` trailer.
+- **Reporting clients are NOT git checkouts.** A reporting host (e.g. the Pi agents) runs the *agent
+  bundle* the dashboard serves — `bootstrap.sh` fetches `/agent.tar.gz` and extracts it (no `.git`), so
+  `git pull` fails there. To ship agent-side code to a client: update + restart the dashboard **server**
+  first (it builds the bundle from its own repo — `AGENT_PATHS` in `topo_server.py`), then re-run the
+  bootstrap on the client to re-fetch. Never tell the user to `git pull` on a client.
 - Python: stdlib-first, type hints, `from __future__ import annotations`. `requirements.txt` is
   intentionally tiny — don't add a dependency for what a few lines of stdlib can do.
 - Match the terseness and comment density of the file you are editing.
