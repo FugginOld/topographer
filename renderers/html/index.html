@@ -136,6 +136,21 @@
   .dcard .du{font-size:10px;color:var(--hud-dim)}
   .dcard .drow{display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--ink);padding:4px 0;border-top:1px solid var(--line)}
   .dcard .dk{color:var(--hud-dim)}
+  /* Homepage-style service tiles for containers */
+  .svc{position:relative;display:flex;align-items:center;gap:10px;background:var(--card-fill);border:1px solid var(--line);
+    border-radius:6px;padding:10px 11px;text-decoration:none;color:inherit;transition:border-color .12s,box-shadow .12s}
+  a.svc:hover{border-color:var(--hud);box-shadow:0 0 14px rgba(var(--glow),.15)}
+  .svc-ico{flex:0 0 auto;width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:700;
+    color:var(--hud);background:rgba(var(--glow),.12);border:1px solid var(--line);text-transform:uppercase}
+  .svc.down .svc-ico{color:var(--crit);background:transparent}
+  .svc-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+  .svc-name{font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .svc-sub{font-size:9px;color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
+  .svc-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#45c46b;box-shadow:0 0 8px rgba(69,196,107,.6)}
+  .svc.down .svc-dot{background:var(--crit);box-shadow:none}
+  .svc-group{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;font-size:9px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--hud-dim);margin:6px 2px -2px;padding-top:6px;border-top:1px solid var(--line)}
+  .svc-group:first-of-type{border-top:0;padding-top:0}
   .dbadge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:9px;letter-spacing:.12em}
   .dbadge.ok{color:var(--ok);border:1px solid var(--ok)}
   .dbadge.bad{color:var(--crit);border:1px solid var(--crit)}
@@ -449,11 +464,22 @@ async function loadSvcDash(){
     document.getElementById('dashupd').textContent=d.error?'':('updated '+new Date().toLocaleTimeString()+(d.stale?' (last known)':''));
   }catch(e){ renderSvc({error:'could not reach the dashboard API.'}); document.getElementById('dashupd').textContent=''; }
 }
-function svcRow(c){
-  const r=hel('div','drow');
-  r.appendChild(hel('span','dk',c.name+(c.image?' · '+c.image:'')));
-  const rv=hel('span',null,c.status||c.state||''); if(c.state&&c.state!=='running') rv.style.color='var(--crit)';
-  r.appendChild(rv); return r;
+// derive a Homepage-style tile from one container
+const shortImg=img=>img?((img.split('/').pop()||img).split(':')[0]):'';
+const pubPort=ports=>{ const m=(ports||'').match(/:(\d+)->/); return m?m[1]:''; };   // first published host port
+const mono=name=>((name||'?').replace(/[^a-z0-9]/gi,'').slice(0,2)||'?');
+function svcTile(c,hip){
+  const down=c.state&&c.state!=='running', port=pubPort(c.ports);
+  const href=(!down&&hip&&port)?`http://${hip}:${port}`:null;   // link to the service when reachable
+  const el=hel(href?'a':'div','svc'+(down?' down':''));
+  if(href){ el.href=href; el.target='_blank'; el.rel='noopener'; }
+  el.appendChild(hel('div','svc-ico',mono(c.name)));            // monogram (offline; no icon CDN)
+  const main=hel('div','svc-main');
+  main.appendChild(hel('div','svc-name',c.name));
+  main.appendChild(hel('div','svc-sub',(shortImg(c.image)+(port?' · :'+port:''))||c.status||c.state||''));
+  el.appendChild(main);
+  const dot=hel('span','svc-dot'); dot.title=c.status||c.state||''; el.appendChild(dot);
+  return el;
 }
 function renderSvc(d){
   const p=document.getElementById('dashpanel'); p.innerHTML='';
@@ -464,18 +490,16 @@ function renderSvc(d){
     e.appendChild(hel('div','du','No docker/podman containers or running services detected'+(d.engine?' ('+d.engine+')':'')+'.'));
     p.appendChild(e); return;
   }
+  const hip=(TOPOS.find(x=>x.id===activeId)||{}).ip;   // host address for service links
   const stacks={}, loose=[];
-  cons.forEach(c=>{ if(c.project){ (stacks[c.project]=stacks[c.project]||[]).push(c); } else loose.push(c); });
+  cons.forEach(c=>{ (c.project?(stacks[c.project]=stacks[c.project]||[]):loose).push(c); });
   const running=cons.filter(c=>c.state==='running').length;
   const sc=statCard('Containers',cons.length);
   sc.appendChild(hel('div','du',running+' running · '+(cons.length-running)+' stopped'+(d.engine?' · '+d.engine:'')));
   p.appendChild(sc);
-  Object.keys(stacks).sort().forEach(proj=>{
-    const card=hel('div','dcard wide'); card.appendChild(hel('div','dl','Stack · '+proj));
-    stacks[proj].forEach(c=>card.appendChild(svcRow(c)));
-    p.appendChild(card);
-  });
-  if(loose.length){ const card=hel('div','dcard wide'); card.appendChild(hel('div','dl','Containers')); loose.forEach(c=>card.appendChild(svcRow(c))); p.appendChild(card); }
+  const group=(title,count)=>{ const g=hel('div','svc-group'); g.appendChild(hel('span',null,title)); g.appendChild(hel('span',null,String(count))); p.appendChild(g); };
+  Object.keys(stacks).sort().forEach(proj=>{ group('Stack · '+proj,stacks[proj].length); stacks[proj].forEach(c=>p.appendChild(svcTile(c,hip))); });
+  if(loose.length){ group('Containers',loose.length); loose.forEach(c=>p.appendChild(svcTile(c,hip))); }
   if(svcs.length){ const card=hel('div','dcard wide'); card.appendChild(hel('div','dl','Running services ('+svcs.length+')')); card.appendChild(hel('div','du',svcs.join(' · '))); p.appendChild(card); }
 }
 // styled Yes/No confirm, reusing the notice card
