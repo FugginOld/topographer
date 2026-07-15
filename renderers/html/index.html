@@ -143,6 +143,7 @@
   .svc-ico{flex:0 0 auto;width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:700;
     color:var(--hud);background:rgba(var(--glow),.12);border:1px solid var(--line);text-transform:uppercase}
   .svc.down .svc-ico{color:var(--crit);background:transparent}
+  img.svc-ico{object-fit:contain;padding:5px;background:rgba(var(--glow),.08)}
   .svc-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
   .svc-name{font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .svc-sub{font-size:9px;color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
@@ -469,12 +470,21 @@ async function loadSvcDash(){
 const shortImg=img=>img?((img.split('/').pop()||img).split(':')[0]):'';
 const pubPort=ports=>{ const m=(ports||'').match(/:(\d+)->/); return m?m[1]:''; };   // first published host port
 const mono=name=>((name||'?').replace(/[^a-z0-9]/gi,'').slice(0,2)||'?');
+// real app icon = the service's own favicon (no CDN, no bundle); monogram on failure
+function svcIcon(c,hip,port,down){
+  const badge=hel('div','svc-ico',mono(c.name));
+  if(down||!hip||!port) return badge;
+  const img=document.createElement('img'); img.className='svc-ico'; img.alt=''; img.loading='lazy';
+  img.src=`http://${hip}:${port}/favicon.ico`;
+  img.onerror=()=>img.replaceWith(badge);                       // fall back to the monogram
+  return img;
+}
 function svcTile(c,hip){
   const down=c.state&&c.state!=='running', port=pubPort(c.ports);
   const href=(!down&&hip&&port)?`http://${hip}:${port}`:null;   // link to the service when reachable
   const el=hel(href?'a':'div','svc'+(down?' down':''));
   if(href){ el.href=href; el.target='_blank'; el.rel='noopener'; }
-  el.appendChild(hel('div','svc-ico',mono(c.name)));            // monogram (offline; no icon CDN)
+  el.appendChild(svcIcon(c,hip,port,down));
   const main=hel('div','svc-main');
   main.appendChild(hel('div','svc-name',c.name));
   main.appendChild(hel('div','svc-sub',(shortImg(c.image)+(port?' · :'+port:''))||c.status||c.state||''));
