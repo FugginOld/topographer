@@ -1048,7 +1048,7 @@ function noticeEl(title,node){                                  // reuse the mod
   notice.classList.remove('busy'); notice.style.display='flex';
 }
 let wDragging=false;                                           // pause panel rebuilds mid-drag
-// icon: a bundled SVG (drop wicons/<name>.svg to override) else a colored monogram
+// icon: the server's /icon proxy (dashboard-icons, cached) else a colored monogram
 function widgetIcon(name,label){
   const mono=()=>{ const s=hel('span','wc-ico wc-mono');
     const t=String(label||name||'?').replace(/[^A-Za-z0-9]/g,'');
@@ -1057,7 +1057,7 @@ function widgetIcon(name,label){
     s.style.background='hsl('+(h%360)+',46%,44%)'; return s; };
   if(!name) return mono();
   const img=document.createElement('img'); img.className='wc-ico'; img.alt=''; img.loading='lazy';
-  img.src='wicons/'+encodeURIComponent(name)+'.svg'; img.onerror=()=>img.replaceWith(mono());
+  img.src='icon?name='+encodeURIComponent(name); img.onerror=()=>img.replaceWith(mono());
   return img;
 }
 function wcatCard(t){
