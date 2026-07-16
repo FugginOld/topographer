@@ -24,55 +24,29 @@ from __future__ import annotations
 import ipaddress
 import logging
 
+from . import transport
 from .base import Collector
 from core.schema import now_iso
 
 log = logging.getLogger("collector.opnsense")
 
-try:
-    import requests
-except ImportError:  # requests listed in requirements.txt
-    requests = None
-
 
 class OPNsenseCollector(Collector):
     name = "opnsense"
 
+    def _auth(self):
+        return (self.cfg["key"], self.cfg["secret"])
+
     def _get(self, path: str):
-        base = self.cfg["url"].rstrip("/")
-        try:
-            r = requests.get(
-                f"{base}{path}",
-                auth=(self.cfg["key"], self.cfg["secret"]),
-                verify=self.cfg.get("verify_tls", False),
-                timeout=15,
-            )
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:  # noqa: BLE001 - never raise out of a collector
-            log.warning("GET %s failed: %s", path, e)
-            return None
+        return transport.get_json(self.cfg["url"].rstrip("/") + path,
+                                  basic_auth=self._auth(), verify=self.cfg.get("verify_tls", False))
 
     def _post(self, path: str, payload: dict | None = None):
-        base = self.cfg["url"].rstrip("/")
-        try:
-            r = requests.post(
-                f"{base}{path}",
-                json=payload or {},
-                auth=(self.cfg["key"], self.cfg["secret"]),
-                verify=self.cfg.get("verify_tls", False),
-                timeout=15,
-            )
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:  # noqa: BLE001
-            log.warning("POST %s failed: %s", path, e)
-            return None
+        return transport.get_json(self.cfg["url"].rstrip("/") + path, json_body=payload or {},
+                                  basic_auth=self._auth(), verify=self.cfg.get("verify_tls", False))
 
     # ---- zones from VLAN settings ----
     def zones(self) -> list[dict]:
-        if requests is None:
-            return []
         data = self._post("/api/interfaces/vlan_settings/searchItem", {"current": 1, "rowCount": 500})
         rows = (data or {}).get("rows", [])
         zmap = self.cfg.get("zone_map", {})
@@ -96,9 +70,6 @@ class OPNsenseCollector(Collector):
         return zones
 
     def collect(self) -> list[dict]:
-        if requests is None:
-            log.warning("requests not installed; skipping opnsense")
-            return []
         nodes: dict[str, dict] = {}
         ts = now_iso()
 

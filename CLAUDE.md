@@ -37,6 +37,7 @@ python renderers/html/_guard.py                 # shared path-injection barrier
 python renderers/html/pushcache.py              # push-freshness cache (live/stale/miss)
 python renderers/html/store.py                  # store slug policy + save/load
 python renderers/html/widget_store.py           # widget store CRUD round-trip
+python collectors/transport.py                   # shared collector HTTP (ssl ctx + get_json)
 python -m widgets.net                            # widget SSRF guard
 python -m widgets.engine                         # widget engine (auth/mapping)
 python -m widgets.fetchers                       # widget stat parsers

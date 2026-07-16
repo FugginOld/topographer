@@ -29,23 +29,15 @@ from __future__ import annotations
 
 import json
 import logging
-import ssl
 import urllib.error
 import urllib.request
 from http.cookiejar import CookieJar
 
+from . import transport
 from .base import Collector
 from core.schema import norm_mac, now_iso
 
 log = logging.getLogger("collector.unifi")
-
-
-def _ssl_ctx(verify: bool):
-    ctx = ssl.create_default_context()
-    if not verify:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    return ctx
 
 # UniFi device .type -> our node kind
 _DEV_KIND = {"ugw": "firewall", "udm": "firewall", "uxg": "firewall",
@@ -292,7 +284,7 @@ class UnifiCollector(Collector):
         """Cookie-aware opener; logs in with username/password if no API key."""
         if self._opener is not None:
             return self._opener
-        ctx = _ssl_ctx(self.cfg.get("verify_tls", False))
+        ctx = transport.ssl_ctx(self.cfg.get("verify_tls", False))
         op = urllib.request.build_opener(
             urllib.request.HTTPSHandler(context=ctx),
             urllib.request.HTTPCookieProcessor(CookieJar()),

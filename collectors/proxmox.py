@@ -17,13 +17,10 @@ Stdlib only (urllib) — no extra dependency. Read-only: only GETs the API.
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
-import ssl
-import urllib.error
-import urllib.request
 
+from . import transport
 from .base import Collector
 from core.schema import norm_mac, now_iso
 
@@ -57,30 +54,11 @@ def ip_from_agent(data: dict | None) -> str | None:
 class ProxmoxCollector(Collector):
     name = "proxmox"
 
-    def __init__(self, cfg: dict):
-        super().__init__(cfg)
-        self._opener = None
-
-    def _ctx(self):
-        ctx = ssl.create_default_context()
-        if not self.cfg.get("verify_tls", False):
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
     def _get(self, path: str):
-        if self._opener is None:
-            self._opener = urllib.request.build_opener(
-                urllib.request.HTTPSHandler(context=self._ctx()))
         url = self.cfg["url"].rstrip("/") + "/api2/json" + path
-        req = urllib.request.Request(
-            url, headers={"Authorization": f"PVEAPIToken={self.cfg.get('token', '')}"})
-        try:
-            with self._opener.open(req, timeout=15) as r:
-                return json.load(r).get("data")
-        except (urllib.error.URLError, ValueError) as e:
-            log.warning("proxmox GET %s failed: %s", path, e)
-            return None
+        d = transport.get_json(url, verify=self.cfg.get("verify_tls", False),
+                               headers={"Authorization": f"PVEAPIToken={self.cfg.get('token', '')}"})
+        return d.get("data") if isinstance(d, dict) else None   # PVE wraps in {data: ...}
 
     def _guest(self, node: str, kind: str, g: dict, ts: str) -> list[dict]:
         vmid = g.get("vmid")

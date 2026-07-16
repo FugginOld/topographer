@@ -16,17 +16,14 @@ from __future__ import annotations
 import logging
 import os
 import re
+import urllib.parse
 
+from . import transport
 from .base import Collector
 
 log = logging.getLogger("collector.dns")
 
 _HOSTLINE = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){3})\s+(\S+)")
-
-try:
-    import requests
-except ImportError:
-    requests = None
 
 
 class DnsCollector(Collector):
@@ -59,14 +56,8 @@ class DnsCollector(Collector):
         return out
 
     def _pihole(self) -> dict[str, str]:
-        if requests is None:
-            return {}
-        try:
-            url = self.cfg["pihole_url"].rstrip("/") + "/api.php?customdns&action=get"
-            r = requests.get(url, params={"auth": self.cfg.get("pihole_token", "")}, timeout=10)
-            r.raise_for_status()
-            data = r.json().get("data", [])
-            return {row[0]: row[1].split(".")[0] for row in data if len(row) >= 2}
-        except Exception as e:  # noqa: BLE001
-            log.warning("pihole fetch failed: %s", e)
-            return {}
+        auth = urllib.parse.quote(self.cfg.get("pihole_token", ""))
+        url = self.cfg["pihole_url"].rstrip("/") + f"/api.php?customdns&action=get&auth={auth}"
+        d = transport.get_json(url, timeout=10)
+        rows = d.get("data", []) if isinstance(d, dict) else []
+        return {row[0]: row[1].split(".")[0] for row in rows if len(row) >= 2}
