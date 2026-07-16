@@ -33,8 +33,9 @@ Tests — exactly what CI runs, all offline:
 python -m compileall -q .
 python tests/test_pipeline.py
 python tests/test_cards.py
-python renderers/html/store.py                  # store path-injection barrier
-python renderers/html/widget_store.py           # widget store barrier + CRUD
+python renderers/html/_guard.py                 # shared path-injection barrier
+python renderers/html/store.py                  # store slug policy + save/load
+python renderers/html/widget_store.py           # widget store CRUD round-trip
 python -m widgets.net                            # widget SSRF guard
 python -m widgets.engine                         # widget engine (auth/mapping)
 python -m widgets.fetchers                       # widget stat parsers

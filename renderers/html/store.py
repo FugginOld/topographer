@@ -12,24 +12,15 @@ import os
 import re
 import time
 
+from _guard import guarded_path
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 STORE = os.path.abspath(os.path.join(_HERE, "..", "..", "out", "topologies"))
 
 
 def path(tid: str) -> str:
-    """Resolve <tid>.json inside STORE, refusing any id that escapes it.
-
-    The single barrier for every user-supplied id: strip directory parts,
-    allowlist the charset, then confirm the resolved file really sits directly
-    in STORE (blocks '..', absolute paths, separators, symlink tricks).
-    """
-    name = os.path.basename(tid)
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
-        raise ValueError("bad topology id")
-    fp = os.path.realpath(os.path.join(STORE, name + ".json"))
-    if os.path.dirname(fp) != os.path.realpath(STORE):
-        raise ValueError("bad topology id")
-    return fp
+    """Resolve <tid>.json inside STORE — the shared path-injection barrier."""
+    return guarded_path(STORE, tid, "topology id")
 
 
 def slug(name: str) -> str:
@@ -79,14 +70,8 @@ def delete(tid: str) -> None:
         os.remove(fp)
 
 
-if __name__ == "__main__":  # ponytail: the barrier is the whole reason to test in isolation
-    for safe in ("network", "../etc/passwd", "a/b", "..", "/abs/x"):   # basename-reduced -> inside STORE
-        assert os.path.dirname(path(safe)) == os.path.realpath(STORE), safe
-    for reject in ("", "a b", "a;b", "a$b"):                            # invalid charset -> rejected
-        try:
-            path(reject); raise AssertionError(f"accepted {reject!r}")
-        except ValueError:
-            pass
+if __name__ == "__main__":  # ponytail: slug policy; the path barrier is tested in _guard.py
+    assert os.path.dirname(path("network")) == os.path.realpath(STORE)   # barrier wired
     assert stable_slug("PVE Host!") == "pve-host"
     assert slug("x").startswith("x-") and slug("x")[2:].isdigit()
     print("store self-check ok")

@@ -14,20 +14,15 @@ import json
 import os
 import re
 
+from _guard import guarded_path
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 STORE = os.path.abspath(os.path.join(_HERE, "..", "..", "out", "widgets"))
 
 
 def _path(host: str) -> str:
-    """Resolve <host>.json inside STORE, refusing any id that escapes it — the
-    same barrier as store.py: basename, charset allowlist, realpath-inside-STORE."""
-    name = os.path.basename(host)
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
-        raise ValueError("bad host id")
-    fp = os.path.realpath(os.path.join(STORE, name + ".json"))
-    if os.path.dirname(fp) != os.path.realpath(STORE):
-        raise ValueError("bad host id")
-    return fp
+    """Resolve <host>.json inside STORE — the shared path-injection barrier."""
+    return guarded_path(STORE, host, "host id")
 
 
 def _read(host: str) -> list[dict]:
@@ -101,14 +96,7 @@ def reorder(host: str, order: list[str]) -> None:
     _write(host, ws)
 
 
-if __name__ == "__main__":   # ponytail: the barrier + CRUD round-trip, isolated
-    for safe in ("rpi5b", "../etc/passwd", "a/b", ".."):    # basename-reduced -> inside STORE
-        assert os.path.dirname(_path(safe)) == os.path.realpath(STORE), safe
-    for bad in ("", "a b", "a;b", "a$b"):                   # invalid charset -> rejected
-        try:
-            _path(bad); raise AssertionError(f"accepted {bad!r}")
-        except ValueError:
-            pass
+if __name__ == "__main__":   # ponytail: CRUD round-trip; the path barrier is tested in _guard.py
     # CRUD against a scratch host, then clean up its file
     h = "__selftest_host__"
     try:

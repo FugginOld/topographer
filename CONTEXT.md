@@ -39,9 +39,10 @@ in sync with `Card`.
 ## Store
 
 The **topology persistence** module (`renderers/html/store.py`): save / load /
-list / delete over the guarded directory `out/topologies/*.json`, plus `path()`
-— the single path-injection barrier every user-supplied id passes through
-(basename → charset allowlist → realpath containment). Deep and narrow: bytes
+list / delete over the guarded directory `out/topologies/*.json`, plus `path()`,
+which delegates to the shared barrier **`_guard.guarded_path`** — the single
+path-injection check every user-supplied id passes (basename → charset allowlist →
+realpath containment), now in exactly one tested place. Deep and narrow: bytes
 in/out, no presentation, so it imports nothing server-specific and its barrier is
 unit-tested with no HTTP. `topology_server` depends on it one-way; the sidebar-row
 shaping (`kind`/`ip`, which needs `server_ip`) stays a view helper in the server,
@@ -61,7 +62,7 @@ Three nouns:
   run by the generic engine (`widgets/engine.py`: auth + endpoints + field mappings).
 - **Widget** — a user-configured *instance* of a Type owned by one host: `{id,
   type, config, position, interval}`. Persisted by `renderers/html/widget_store.py`
-  (same guarded-directory barrier as **Store**, `out/widgets/<host>.json`). Config
+  (shares the `_guard.guarded_path` barrier with **Store**, `out/widgets/<host>.json`). Config
   holds secrets — masked on read, never sent to the browser.
 - **Widget Store** — the browsable catalog (`widgets/catalog.json`, all 155
   Homepage types) + the persistence + the `/api/widget-*` routes + the `index.html`
