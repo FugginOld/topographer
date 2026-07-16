@@ -6,7 +6,12 @@ Adding a Type = one CATALOG entry + one fetcher (docs/prd/widget-store.md, Phase
 """
 from __future__ import annotations
 
+import json
+import os
+
 from . import fetchers
+
+_CATALOG_JSON = os.path.join(os.path.dirname(__file__), "catalog.json")
 
 # shared field set for the url + API-key services (Servarr, SABnzbd, Tautulli, …)
 _ARR_FIELDS = [
@@ -99,6 +104,40 @@ def catalog_public() -> list[dict]:
     return [{k: v for k, v in t.items() if k != "fetch"} for t in CATALOG]
 
 
+def full_catalog() -> list[dict]:
+    """The whole browsable store: every Homepage widget from catalog.json, merged
+    with our built ones. Built types carry their real field schema (installable);
+    unbuilt types are listed for reference (built=False, no fetcher, can't install)."""
+    try:
+        allw = (json.load(open(_CATALOG_JSON, encoding="utf-8")) or {}).get("widgets") or []
+    except Exception:
+        allw = []
+    built = {t["id"]: t for t in CATALOG}
+    out, seen = [], set()
+    for w in allw:
+        wid = w.get("id")
+        if not wid or wid in seen:
+            continue
+        seen.add(wid)
+        b = built.get(wid)
+        if b:
+            out.append({"id": wid, "label": b["label"], "category": b.get("category") or w.get("category") or "Other",
+                        "icon": b.get("icon") or wid, "built": True, "desc": b.get("desc") or w.get("note") or "",
+                        "shows": w.get("shows") or [], "doc": w.get("doc"),
+                        "fields": [dict(f) for f in b["fields"]], "config_key": b.get("config_key")})
+        else:
+            out.append({"id": wid, "label": w.get("title") or wid, "category": w.get("category") or "Other",
+                        "icon": wid, "built": False, "desc": w.get("note") or "",
+                        "shows": w.get("shows") or [], "doc": w.get("doc"), "config": w.get("config") or []})
+    for wid, b in built.items():                         # our built types not in the cache (e.g. seerr)
+        if wid not in seen:
+            out.append({"id": wid, "label": b["label"], "category": b.get("category") or "Other",
+                        "icon": b.get("icon") or wid, "built": True, "desc": b.get("desc") or "",
+                        "shows": [], "doc": None, "fields": [dict(f) for f in b["fields"]],
+                        "config_key": b.get("config_key")})
+    return out
+
+
 def fetch(type_id: str, config: dict) -> dict:
     """Live stats for one configured widget. Never raises — a bad fetcher must not
     500 the dashboard (defence-in-depth on top of the fetchers' own guards)."""
@@ -122,4 +161,7 @@ if __name__ == "__main__":   # ponytail: catalog integrity + JSON-safety, offlin
     assert field_names("unifi")[0] == "url"
     _json.dumps(catalog_public())            # must be serialisable (no callables)
     assert fetch("nope", {}) == {}
-    print(f"widgets/registry self-check ok ({len(CATALOG)} types)")
+    fc = full_catalog()                      # merged store: all cached + our built ones
+    assert len(fc) >= len(CATALOG) and sum(1 for w in fc if w["built"]) == len(CATALOG)
+    _json.dumps(fc)                          # JSON-safe (no fetch callables leaked)
+    print(f"widgets/registry self-check ok ({len(CATALOG)} built / {len(fc)} in store)")

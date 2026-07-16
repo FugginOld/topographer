@@ -173,7 +173,24 @@
   .wcat-search{background:var(--bg0);border:1px solid var(--line);border-radius:4px;padding:7px 9px;color:var(--ink);font-family:inherit;font-size:11px}
   .wcat-search:focus{outline:none;border-color:var(--hud)}
   .wcat-list{overflow:auto;display:flex;flex-direction:column;gap:6px}
-  .wcat-head{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud);padding:6px 0 2px}
+  .wcat-head{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud);padding:10px 2px 3px;position:sticky;top:-1px;background:var(--card-fill-big);z-index:1}
+  #notice.store .nc-card{max-width:680px;width:calc(100% - 40px)}
+  .wstore{display:flex;flex-direction:column;gap:8px}
+  .wstore-list{overflow-y:auto;max-height:64vh;display:flex;flex-direction:column;padding-right:2px}
+  .wstore-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:5px;background:transparent;color:var(--ink);font-family:inherit;cursor:pointer;text-align:left;width:100%}
+  .wstore-row:hover{background:rgba(var(--glow),.08)}
+  .wstore-row .wc-ico{width:18px;height:18px}
+  .wstore-nm{flex:1;font-size:11px;color:var(--card-title)}
+  .wstore-row.unbuilt{opacity:.62}
+  .wstore-badge{font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--hud-dim);border:1px solid var(--line);border-radius:3px;padding:2px 5px}
+  .wstore-detail{display:flex;flex-direction:column;gap:9px;min-width:280px}
+  .wsd-head{display:flex;align-items:center;gap:9px}
+  .wsd-head .wc-ico{width:26px;height:26px}
+  .wsd-title{font-size:14px;font-weight:600;color:var(--card-title);flex:1}
+  .wsd-cat{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--hud)}
+  .wsd-desc{font-size:11px;color:var(--ink);line-height:1.6;margin:0}
+  .wsd-meta{font-size:9.5px;color:var(--hud-dim);line-height:1.5}
+  .wsd-note{font-size:10px;color:var(--warn);line-height:1.5;padding:8px 10px;background:rgba(var(--glow),.06);border:1px solid var(--line);border-radius:4px}
   .wh-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin:0 3px}
   .wh-dot.ok{background:var(--ok)}
   .wh-dot.bad{background:var(--crit)}
@@ -1045,8 +1062,9 @@ async function widgetCatalog(){
 function noticeEl(title,node){                                  // reuse the modal chrome, DOM body (no innerHTML)
   notice.querySelector('.nc-title').textContent=title;
   const b=notice.querySelector('.nc-body'); b.innerHTML=''; b.appendChild(node);
-  notice.classList.remove('busy'); notice.style.display='flex';
+  notice.classList.remove('busy','store'); notice.style.display='flex';
 }
+function storeNotice(title,node){ noticeEl(title,node); notice.classList.add('store'); }   // wide modal for the store
 let wDragging=false;                                           // pause panel rebuilds mid-drag
 // icon: the server's /icon proxy (dashboard-icons, cached) else a colored monogram
 function widgetIcon(name,label){
@@ -1060,31 +1078,54 @@ function widgetIcon(name,label){
   img.src='icon?name='+encodeURIComponent(name); img.onerror=()=>img.replaceWith(mono());
   return img;
 }
-function wcatCard(t){
-  const card=hel('button','wc-card'); card.type='button';
-  card.appendChild(widgetIcon(t.icon,t.label));
-  card.appendChild(hel('div','wc-name',t.label||t.id));
-  if(t.desc) card.appendChild(hel('div','wc-desc',t.desc));
-  card.onclick=()=>openWidgetForm(t,null);
-  return card;
+const WCAT_ORDER=['Media','Downloads','Network','Monitoring','Infrastructure','Home & IoT','Security','Files & Docs','Comms & Requests','Other'];
+function wStoreRow(t){
+  const row=hel('button','wstore-row'+(t.built?'':' unbuilt')); row.type='button';
+  row.appendChild(widgetIcon(t.icon,t.label));
+  row.appendChild(hel('span','wstore-nm',t.label||t.id));
+  if(!t.built) row.appendChild(hel('span','wstore-badge','not built'));
+  row.onclick=()=>wStoreDetail(t);
+  return row;
 }
-// catalog: search box + cards grouped by category
+// the store: all widgets, grouped by category (all expanded), one scroll; click -> detail
 async function openWidgetCatalog(){
-  const cat=await widgetCatalog(), wrap=hel('div','wcat-wrap');
-  const search=document.createElement('input'); search.className='wcat-search'; search.type='text'; search.placeholder='Search widgets…';
-  const listEl=hel('div','wcat-list'); wrap.appendChild(search); wrap.appendChild(listEl);
+  const cat=await widgetCatalog(), wrap=hel('div','wstore');
+  const search=document.createElement('input'); search.className='wcat-search'; search.type='text';
+  search.placeholder='Search '+cat.length+' widgets…';
+  const listEl=hel('div','wstore-list'); wrap.appendChild(search); wrap.appendChild(listEl);
+  const catRank=c=>{ const i=WCAT_ORDER.indexOf(c); return i<0?99:i; };
   function render(f){
     listEl.innerHTML=''; f=(f||'').toLowerCase();
     const groups={};
     cat.filter(t=>!f||((t.label||'')+' '+(t.category||'')+' '+(t.desc||'')).toLowerCase().includes(f))
        .forEach(t=>{ const c=t.category||'Other'; (groups[c]=groups[c]||[]).push(t); });
-    const names=Object.keys(groups).sort();
+    const names=Object.keys(groups).sort((a,b)=>catRank(a)-catRank(b)||a.localeCompare(b));
     if(!names.length){ listEl.appendChild(hel('div','wc-empty','No matches.')); return; }
-    names.forEach(cn=>{ listEl.appendChild(hel('div','wcat-head',cn));
-      const grid=hel('div','wcat'); groups[cn].forEach(t=>grid.appendChild(wcatCard(t))); listEl.appendChild(grid); });
+    names.forEach(cn=>{ listEl.appendChild(hel('div','wcat-head',cn+' · '+groups[cn].length));
+      groups[cn].sort((a,b)=>(a.label||'').localeCompare(b.label||'')).forEach(t=>listEl.appendChild(wStoreRow(t))); });
   }
   search.oninput=()=>render(search.value); render('');
-  noticeEl('Add Widget',wrap); setTimeout(()=>search.focus(),40);
+  storeNotice('Widget Store',wrap); setTimeout(()=>search.focus(),40);
+}
+// widget detail: description + config/shows, then Install (built) or Docs (unbuilt); Cancel -> back
+function wStoreDetail(t){
+  const wrap=hel('div','wstore-detail');
+  const head=hel('div','wsd-head'); head.appendChild(widgetIcon(t.icon,t.label));
+  head.appendChild(hel('div','wsd-title',t.label||t.id));
+  if(t.category) head.appendChild(hel('span','wsd-cat',t.category));
+  wrap.appendChild(head);
+  if(t.desc) wrap.appendChild(hel('p','wsd-desc',t.desc));
+  const cfg=(t.fields?t.fields.map(f=>f.label||f.name):(t.config||[]));
+  if(cfg&&cfg.length) wrap.appendChild(hel('div','wsd-meta','Configure: '+cfg.join(', ')));
+  if(t.shows&&t.shows.length) wrap.appendChild(hel('div','wsd-meta','Shows: '+t.shows.join(', ')));
+  if(!t.built) wrap.appendChild(hel('div','wsd-note','Listed for reference — this widget isn’t wired into the store yet (no data fetcher). Ask to have it added.'));
+  const foot=hel('div','wf-foot');
+  const back=hel('button','wf-cancel','Cancel'); back.type='button'; back.onclick=openWidgetCatalog;
+  foot.appendChild(back);
+  if(t.built){ const inst=hel('button','wf-save','Install'); inst.type='button'; inst.onclick=()=>openWidgetForm(t,null); foot.appendChild(inst); }
+  else if(t.doc){ const dl=document.createElement('a'); dl.className='wf-cancel'; dl.textContent='Docs ↗'; dl.href=t.doc; dl.target='_blank'; dl.rel='noopener'; foot.appendChild(dl); }
+  wrap.appendChild(foot);
+  storeNotice(t.label||t.id,wrap);
 }
 // config form from a Type's field schema; `inst` = the existing widget when editing
 function openWidgetForm(type,inst){

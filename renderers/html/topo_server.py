@@ -553,7 +553,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._send(200, {"error": str(e)})
         if self.path.split("?")[0] == "/api/widget-catalog":
-            return self._send(200, wreg.catalog_public())
+            return self._send(200, wreg.full_catalog())
         if self.path.split("?")[0] == "/api/widgets":
             host = store.stable_slug(parse_qs(urlparse(self.path).query).get("host", [""])[0])
             return self._send(200, widgets_list(host))
