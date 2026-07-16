@@ -34,6 +34,7 @@ python -m compileall -q .
 python tests/test_pipeline.py
 python tests/test_cards.py
 python renderers/html/_guard.py                 # shared path-injection barrier
+python renderers/html/pushcache.py              # push-freshness cache (live/stale/miss)
 python renderers/html/store.py                  # store slug policy + save/load
 python renderers/html/widget_store.py           # widget store CRUD round-trip
 python -m widgets.net                            # widget SSRF guard

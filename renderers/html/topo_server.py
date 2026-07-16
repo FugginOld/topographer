@@ -33,6 +33,7 @@ from urllib.parse import urlparse, parse_qs
 
 import store          # topology persistence (same dir) — see store.py / CONTEXT.md
 import widget_store    # per-host widget instances (same dir) — see widget_store.py
+from pushcache import PushCache   # per-host push-freshness cache (same dir)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -192,14 +193,10 @@ def host_services(host_id: str) -> dict:
     agent last reported (push model, like telemetry)."""
     if host_id and not _is_remote(host_id):
         return _local_services()
-    h = _host_svc.get(store.stable_slug(host_id))
-    if h and time.monotonic() - h["t"] < SVC_FRESH:
-        return {**h["data"], "live": True}
-    if h:
-        return {**h["data"], "stale": True}       # show last-known even if old
-    return {"error": "no services reported for this host yet — its agent reports "
-                     "containers/services automatically once updated (git pull or "
-                     "re-run bootstrap on that machine)."}
+    return _pushed_svc.get(host_id) or {           # live/stale last-known, else the how-to
+        "error": "no services reported for this host yet — its agent reports "
+                 "containers/services automatically once updated (git pull or "
+                 "re-run bootstrap on that machine)."}
 
 
 # ── service icons: match a container to a dashboard-icons logo, fetched once from
@@ -270,17 +267,13 @@ def icon_bytes(name: str, image: str):
 # remote host serves whatever its reporting agent last pushed — push model, like
 # telemetry/services, so remote Linux hosts light up with no per-host config.
 #   glances: {enabled: true, url: "http://localhost:61208", version: 4}
-_glances_cache = {"t": 0.0, "data": {}}
-_host_gl: dict[str, dict] = {}     # host id -> {"t": monotonic, "data": compact metrics}
-GL_FRESH = 15.0                    # seconds a pushed sample stays "live"
+_glances_cache = {"t": 0.0, "data": {}}   # this server's OWN glances proxy (brief cache), not a push
+_pushed_gl = PushCache(15.0, store.stable_slug)   # remote hosts' pushed glances metrics
 
 
 def glances_stats(host_id: str) -> dict:
     if host_id and _is_remote(host_id):                  # remote host: serve its agent's push
-        h = _host_gl.get(store.stable_slug(host_id))
-        if h and time.monotonic() - h["t"] < GL_FRESH:
-            return {**h["data"], "live": True}
-        return {**h["data"], "stale": True} if h else {}
+        return _pushed_gl.get(host_id) or {}
     cfg = _cfg_block("glances")                          # this machine: proxy its local Glances
     if not cfg.get("enabled"):
         return {}
@@ -393,11 +386,9 @@ from core import local_telemetry as _tele   # noqa: E402  shared local-metrics s
 from core import glances                     # noqa: E402  Glances reader (also used by the agent)
 from widgets import registry as wreg         # noqa: E402  widget Type catalog + fetchers
 
-_tele_cache = {"t": 0.0, "data": dict(_tele.ZERO)}
-_host_tele: dict[str, dict] = {}   # host id -> {"t": monotonic, "data": {...}}
-FRESH = 15.0                       # seconds a pushed sample stays "live"
-_host_svc: dict[str, dict] = {}    # host id -> {"t": monotonic, "data": containers/services}
-SVC_FRESH = 900.0                  # services push slowly (~5 min); 15 min stays "live"
+_tele_cache = {"t": 0.0, "data": dict(_tele.ZERO)}   # this server's OWN metrics (brief cache), not a push
+_pushed_tele = PushCache(15.0, store.stable_slug)    # remote hosts' pushed telemetry
+_pushed_svc = PushCache(900.0, store.stable_slug)    # remote hosts' pushed services (push slowly, ~5 min)
 
 
 def telemetry_local() -> dict:
@@ -421,12 +412,12 @@ def host_telemetry(tid: str) -> dict:
     """Telemetry for the selected host: its pushed sample if fresh, else the
     server's own metrics for a local topology, else stale zeros for a remote
     host that isn't reporting."""
-    h = _host_tele.get(tid)
-    if h and time.monotonic() - h["t"] < FRESH:
-        return {**h["data"], "live": True}
+    pushed = _pushed_tele.get(tid)
+    if pushed and pushed.get("live"):
+        return pushed
     if not _is_remote(tid):
         return {**telemetry_local(), "live": True}
-    return {**_tele.ZERO, "stale": True}
+    return {**_tele.ZERO, "stale": True}   # remote + no fresh push -> zeros (not stale data, by design)
 
 
 # ── Widget Store: per-host service widgets. Config (incl. secrets) lives in
@@ -610,7 +601,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not hid:
                     return self._send(400, {"error": "missing host"})
                 data = {k: b.get(k, z) for k, z in _tele.ZERO.items()}
-                _host_tele[hid] = {"t": time.monotonic(), "data": data}
+                _pushed_tele.put(hid, data)
                 return self._send(200, {"ok": True, "host": hid})
             if self.path == "/api/ingest-services":
                 if INGEST_TOKEN and self.headers.get("X-Token") != INGEST_TOKEN:
@@ -619,8 +610,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 hid = store.stable_slug(b.get("host", ""))
                 if not hid:
                     return self._send(400, {"error": "missing host"})
-                _host_svc[hid] = {"t": time.monotonic(),
-                                  "data": {k: b.get(k) for k in ("engine", "containers", "services")}}
+                _pushed_svc.put(hid, {k: b.get(k) for k in ("engine", "containers", "services")})
                 return self._send(200, {"ok": True, "host": hid})
             if self.path == "/api/ingest-glances":
                 if INGEST_TOKEN and self.headers.get("X-Token") != INGEST_TOKEN:
@@ -630,7 +620,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not hid:
                     return self._send(400, {"error": "missing host"})
                 data = {k: v for k, v in b.items() if k != "host"}   # the compact metrics dict
-                _host_gl[hid] = {"t": time.monotonic(), "data": data}
+                _pushed_gl.put(hid, data)
                 return self._send(200, {"ok": True, "host": hid})
             if self.path == "/api/widget-add":
                 b = self._body()
