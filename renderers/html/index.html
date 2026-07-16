@@ -1118,12 +1118,16 @@ function wStoreDetail(t){
   const cfg=(t.fields?t.fields.map(f=>f.label||f.name):(t.config||[]));
   if(cfg&&cfg.length) wrap.appendChild(hel('div','wsd-meta','Configure: '+cfg.join(', ')));
   if(t.shows&&t.shows.length) wrap.appendChild(hel('div','wsd-meta','Shows: '+t.shows.join(', ')));
-  if(!t.built) wrap.appendChild(hel('div','wsd-note','Listed for reference — this widget isn’t wired into the store yet (no data fetcher). Ask to have it added.'));
+  if(!t.built) wrap.appendChild(hel('div','wsd-note','Not built yet — no data fetcher on this server. If you run '+(t.label||'this service')+', adding it is ~10 lines (see the guide) and it lights up for everyone.'));
+  const extLink=(txt,href,cls)=>{ const a=document.createElement('a'); a.className=cls||'wf-cancel'; a.textContent=txt; a.href=href; a.target='_blank'; a.rel='noopener'; return a; };
   const foot=hel('div','wf-foot');
   const back=hel('button','wf-cancel','Cancel'); back.type='button'; back.onclick=openWidgetCatalog;
   foot.appendChild(back);
   if(t.built){ const inst=hel('button','wf-save','Install'); inst.type='button'; inst.onclick=()=>openWidgetForm(t,null); foot.appendChild(inst); }
-  else if(t.doc){ const dl=document.createElement('a'); dl.className='wf-cancel'; dl.textContent='Docs ↗'; dl.href=t.doc; dl.target='_blank'; dl.rel='noopener'; foot.appendChild(dl); }
+  else{
+    if(t.doc) foot.appendChild(extLink('Docs ↗',t.doc));
+    foot.appendChild(extLink('Add this widget ↗','https://github.com/FugginOld/topographer/blob/main/docs/widgets-adding.md','wf-save'));
+  }
   wrap.appendChild(foot);
   storeNotice(t.label||t.id,wrap);
 }
