@@ -214,6 +214,15 @@
   .svc-name{font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .svc-sub{font-size:9px;color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
   .svc-stat{font-size:8.5px;color:var(--hud);letter-spacing:.03em;font-variant-numeric:tabular-nums;opacity:.85}
+  /* radial CPU/MEM gauges on a container tile — conic-gradient ring, no lib */
+  .svc-gauges{display:flex;gap:12px;margin-top:3px}
+  .gg{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .gg .ring{--v:0;--gc:var(--hud);position:relative;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+    background:conic-gradient(var(--gc) calc(var(--v)*3.6deg),rgba(var(--glow),.14) 0)}
+  .gg .ring.warm{--gc:var(--warn)} .gg .ring.hot{--gc:var(--crit)}
+  .gg .ring::before{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--card-fill)}
+  .gg .ring b{position:relative;font-size:7.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--card-title)}
+  .gg em{font-style:normal;font-size:6px;letter-spacing:.06em;color:var(--hud-dim)}
   /* Glances system panel: 3x2 tile grid, Homepage-style */
   .gwrap{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
   .gtile{position:relative;overflow:hidden;background:var(--card-fill);border:1px solid var(--line);border-radius:8px;
@@ -699,6 +708,12 @@ function svcIcon(c,hip,port,down){
   img.onerror=()=>{ i++; i<srcs.length ? img.src=srcs[i] : img.replaceWith(badge); };
   return img;
 }
+const gpct=s=>{const n=parseFloat(s);return isNaN(n)?null:Math.max(0,Math.min(100,n));};   // "3.20%" -> 3.2
+function gauge(label,val,raw){                                  // radial CPU/MEM ring
+  const g=hel('div','gg'), ring=hel('div','ring'+(val>=85?' hot':val>=60?' warm':''));
+  ring.style.setProperty('--v',val); ring.appendChild(hel('b',null,Math.round(val)));
+  g.appendChild(ring); g.appendChild(hel('em',null,label)); g.title=label+' '+(raw||val+'%'); return g;
+}
 function svcTile(c,hip){
   const down=c.state&&c.state!=='running', port=pubPort(c.ports);
   const href=down?null:webuiUrl(c.webui,hip,port);              // link to the service when reachable
@@ -708,7 +723,13 @@ function svcTile(c,hip){
   const main=hel('div','svc-main');
   main.appendChild(hel('div','svc-name',c.name));
   main.appendChild(hel('div','svc-sub',(shortImg(c.image)+(port?' · :'+port:''))||c.status||c.state||''));
-  if(c.cpu||c.mem) main.appendChild(hel('div','svc-stat',[c.cpu&&'CPU '+c.cpu,c.mem&&'MEM '+c.mem].filter(Boolean).join('   ·   ')));
+  const cg=gpct(c.cpu), mg=gpct(c.memp);
+  if(cg!=null||mg!=null){
+    const row=hel('div','svc-gauges');
+    if(cg!=null) row.appendChild(gauge('CPU',cg,c.cpu));
+    if(mg!=null) row.appendChild(gauge('MEM',mg,c.mem||c.memp));
+    main.appendChild(row);
+  }
   el.appendChild(main);
   const dot=hel('span','svc-dot'); dot.title=c.status||c.state||''; el.appendChild(dot);
   return el;
