@@ -345,7 +345,10 @@ async function loadList(){
   try{ const r=await fetch('api/list?_='+Date.now()); TOPOS=r.ok?await r.json():[]; }
   catch(e){ TOPOS=[]; }
   renderList();
-  if(!activeId && TOPOS.length) selectTopo(TOPOS[0].id);
+  if(!activeId && TOPOS.length){                          // restore last-viewed machine across refresh; fall back to first
+    let saved; try{ saved=localStorage.getItem('activeHost'); }catch(e){}
+    selectTopo(TOPOS.some(t=>t.id===saved)?saved:TOPOS[0].id);
+  }
   else if(!TOPOS.length){ TOPO=null; showErr('no topologies yet.<br><br>hit <b>GENERATE</b> to map this PC, or run<br><code>python scanners/make_pc_topo.py</code>'); }
 }
 function renderList(){
@@ -370,7 +373,7 @@ function renderList(){
   if(hosts.length){ section('MACHINES'); hosts.forEach(item); }
 }
 async function selectTopo(id){
-  activeId=id; pinned=null; renderList();
+  activeId=id; pinned=null; try{ localStorage.setItem('activeHost',id); }catch(e){} renderList();
   try{
     const r=await fetch('t/'+id+'.json?_='+Date.now());
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -378,8 +381,9 @@ async function selectTopo(id){
     document.getElementById('err').style.display='none';
     document.getElementById('title').textContent=spaced(TOPO.name||'TOPOGRAPHER');
     document.getElementById('subtitle').textContent=(TOPO.nodes||[]).length+' modules · PCIe fabric · simulated telemetry';
-    laidOut=false; layout(); fit();
+    laidOut=false; layout();
     setView('topology'); viewtabs.style.display='flex';   // reset to Topology on every switch
+    fit();                                                // fit AFTER setView: dashview hides #stage, so it must be visible to measure
   }catch(e){ showErr('could not load '+esc(id)+'.json ('+esc(e.message)+')'); }
 }
 async function delTopo(t){
@@ -780,6 +784,7 @@ function layout(){
 function fit(){
   if(!TOPO)return;
   const b=document.getElementById('stage').getBoundingClientRect();
+  if(!b.width||!b.height)return;                          // stage hidden -> skip, don't set a 0-scale (invisible) transform
   const ys=TOPO.nodes.map(n=>n.y);
   const minx=Math.min(...TOPO.nodes.map(n=>n.x))-40,maxx=Math.max(...TOPO.nodes.map(n=>n.x+(n.w||160)))+40;
   const miny=Math.min(...ys)-40,maxy=Math.max(...ys)+40;
