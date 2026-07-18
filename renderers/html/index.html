@@ -206,6 +206,7 @@
   .svc{position:relative;display:flex;align-items:center;gap:10px;background:var(--card-fill);border:1px solid var(--line);
     border-radius:6px;padding:10px 11px;text-decoration:none;color:inherit;transition:border-color .12s,box-shadow .12s}
   a.svc:hover{border-color:var(--hud);box-shadow:0 0 14px rgba(var(--glow),.15)}
+  .svc.pve{grid-column:span 2;align-items:flex-start}   /* PVE detail tiles: wider so rows aren't cramped */
   .svc-ico{flex:0 0 auto;width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:700;
     color:var(--hud);background:rgba(var(--glow),.12);border:1px solid var(--line);text-transform:uppercase}
   .svc.down .svc-ico{color:var(--crit);background:transparent}
@@ -756,7 +757,7 @@ function hudMetric(label,val,hist,rgb,noSpark){
 function svcTile(c,hip){
   const down=c.state&&c.state!=='running', port=pubPort(c.ports);
   const href=down?null:webuiUrl(c.webui,hip,port);              // link to the service when reachable
-  const el=hel(href?'a':'div','svc'+(down?' down':''));
+  const el=hel(href?'a':'div','svc'+(down?' down':'')+(c.detail?' pve':''));   // PVE tiles span 2 cols
   if(href){ el.href=href; el.target='_blank'; el.rel='noopener'; }
   el.appendChild(svcIcon(c,hip,port,down));
   const main=hel('div','svc-main');
