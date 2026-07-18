@@ -310,6 +310,7 @@
   <div id="zoom">
     <button id="zin" title="zoom in">+</button>
     <button id="zout" title="zoom out">−</button>
+    <button id="zorient" title="toggle horizontal / vertical layout">⇄</button>
     <button id="zfit" class="fit" title="fit to window">FIT</button>
   </div>
 </main>
@@ -341,15 +342,17 @@ function setTheme(t){
 }
 const SKINS=[...document.getElementById('skin').options].map(o=>o.value);
 const wanted=location.hash.slice(1);   // deep-link a skin: dashboard/#unraid-dark
-const stored=(()=>{try{return localStorage.getItem('skin')||'';}catch(e){return '';}})();
-// validate both against the current skin list — a value saved from a retired skin falls back to default
-setTheme(SKINS.includes(wanted)?wanted:(SKINS.includes(stored)?stored:''));
+const stored=(()=>{try{return localStorage.getItem('skin');}catch(e){return null;}})();   // null = never chosen
+// validate both against the current skin list — a value saved from a retired skin falls back to default.
+// Unraid Dark is the default; an explicit choice (incl. "" = Neutral Dark) is kept.
+setTheme(SKINS.includes(wanted)?wanted:(stored!=null&&SKINS.includes(stored)?stored:'unraid-dark'));
 document.getElementById('skin').value=document.body.dataset.theme||'';
 document.getElementById('skin').onchange=e=>setTheme(e.target.value);
 
 let TOPO=null;                 // {name,generated,nodes:[...]}
 const view={k:1,tx:0,ty:0};
 let TOPOS=[], activeId=null, laidOut=false;
+let orient=(()=>{ try{ return localStorage.getItem('topoOrient')==='h'?'h':'v'; }catch(e){ return 'v'; } })();   // 'v'=vertical (default)
 
 // ================= SIDEBAR =================
 async function loadList(){
@@ -780,7 +783,9 @@ function svcTile(c,hip){
   }
   return el;
 }
-let svcRunningOnly=(()=>{ try{ return localStorage.getItem('svcRunningOnly')==='1'; }catch(e){ return false; } })();
+// "running only" is per machine/server, keyed by the active host
+const _roKey=()=>'svcRunningOnly:'+activeId;
+const getRunOnly=()=>{ try{ return localStorage.getItem(_roKey())==='1'; }catch(e){ return false; } };
 let _lastSvc=null;                                     // last services payload, for re-render on toggle
 function renderSvc(d){
   _lastSvc=d;
@@ -794,14 +799,15 @@ function renderSvc(d){
     p.appendChild(e); return;
   }
   const running=allCons.filter(c=>c.state==='running').length;
-  const cons=svcRunningOnly?allCons.filter(c=>c.state==='running'):allCons;   // "running only" toggle
+  const runOnly=getRunOnly();                                                 // per-machine "running only"
+  const cons=runOnly?allCons.filter(c=>c.state==='running'):allCons;
   const hip=(TOPOS.find(x=>x.id===activeId)||{}).ip;   // host address for service links
   const stacks={}, loose=[];
   cons.forEach(c=>{ (c.project?(stacks[c.project]=stacks[c.project]||[]):loose).push(c); });
   const sc=statCard('Containers',allCons.length);
   sc.appendChild(hel('div','du',running+' running · '+(allCons.length-running)+' stopped'+(d.engine?' · '+d.engine:'')));
-  const tg=hel('label','svc-toggle'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=svcRunningOnly;
-  cb.onchange=()=>{ svcRunningOnly=cb.checked; try{ localStorage.setItem('svcRunningOnly',cb.checked?'1':'0'); }catch(e){} if(_lastSvc) renderSvc(_lastSvc); };
+  const tg=hel('label','svc-toggle'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=runOnly;
+  cb.onchange=()=>{ try{ localStorage.setItem(_roKey(),cb.checked?'1':'0'); }catch(e){} if(_lastSvc) renderSvc(_lastSvc); };
   tg.appendChild(cb); tg.appendChild(hel('span',null,'Running only')); sc.appendChild(tg);
   p.appendChild(sc);
   const group=(title,count)=>{ const g=hel('div','svc-group'); g.appendChild(hel('span',null,title)); g.appendChild(hel('span',null,String(count))); p.appendChild(g); };
@@ -841,12 +847,20 @@ function layout(){
   // column. n.x is the card's LEFT edge (render/links/fit all treat it that way).
   const ROWH=48, GAP=90;
   nodes.forEach(n=>{ n.w=cardWidth(n); });
-  const dep={}, colW={};
-  nodes.forEach(n=>{ const d=depth(n); dep[n.id]=d; colW[d]=Math.max(colW[d]||CW_MIN,n.w); });
+  const dep={};
+  nodes.forEach(n=>{ dep[n.id]=depth(n); });
   const maxD=Math.max(0,...nodes.map(n=>dep[n.id]));
-  const colX={}; let cx=0;
-  for(let d=0; d<=maxD; d++){ colX[d]=cx; cx+=(colW[d]||CW_MIN)+GAP; }
-  nodes.forEach(n=>{ n.x=colX[dep[n.id]]; n.y=slotOf[n.id]*ROWH; });
+  if(orient==='h'){
+    // horizontal: levels stack top->bottom; siblings spread left->right, pitch = widest card so none collide
+    const LVLH=42+64, SLOTW=Math.max(CW_MIN,...nodes.map(n=>n.w))+GAP;
+    nodes.forEach(n=>{ n.x=slotOf[n.id]*SLOTW-n.w/2; n.y=dep[n.id]*LVLH; });   // n.y is the card centre
+  } else {
+    // vertical: levels are columns left->right, spaced by the widest card in each; siblings stack
+    const colW={}; nodes.forEach(n=>{ colW[dep[n.id]]=Math.max(colW[dep[n.id]]||CW_MIN,n.w); });
+    const colX={}; let cx=0;
+    for(let d=0; d<=maxD; d++){ colX[d]=cx; cx+=(colW[d]||CW_MIN)+GAP; }
+    nodes.forEach(n=>{ n.x=colX[dep[n.id]]; n.y=slotOf[n.id]*ROWH; });
+  }
   laidOut=true;
 }
 function fit(){
@@ -901,13 +915,20 @@ function render(){
   if(big&&byId[big]) cardBig(world,byId[big],big===pinned);   // drawn last -> on top, enlarged
 }
 function drawLink(world,p,c,cls,load,label){
-  load=load||.1; const px=p.x+(p.w||160), cx=c.x, midx=(px+cx)/2;   // parent right edge -> child left edge
-  const d=`M ${px} ${p.y} C ${midx} ${p.y}, ${midx} ${c.y}, ${cx} ${c.y}`;
+  load=load||.1;
+  let d,lx,ly;
+  if(orient==='h'){                                  // parent bottom edge -> child top edge (h≈38, half≈19)
+    const x1=p.x+(p.w||160)/2, y1=p.y+19, x2=c.x+(c.w||160)/2, y2=c.y-19, midy=(y1+y2)/2;
+    d=`M ${x1} ${y1} C ${x1} ${midy}, ${x2} ${midy}, ${x2} ${y2}`; lx=(x1+x2)/2; ly=midy-4;
+  } else {                                           // parent right edge -> child left edge
+    const px=p.x+(p.w||160), cx=c.x, midx=(px+cx)/2;
+    d=`M ${px} ${p.y} C ${midx} ${p.y}, ${midx} ${c.y}, ${cx} ${c.y}`; lx=midx; ly=(p.y+c.y)/2-4;
+  }
   world.appendChild(el('path',{d,fill:'none',stroke:COL.line,'stroke-width':1.2}));
   world.appendChild(el('path',{d,fill:'none',stroke:CLS[cls]||CLS.gen3,'stroke-width':1+load*2.6,
     'stroke-dasharray':'3 11','stroke-dashoffset':c.dash||0,'stroke-linecap':'round',opacity:0.3+load*0.55,filter:'url(#g)'}));
-  if(label){ const ly=(p.y+c.y)/2-4;                 // midx = the link's real horizontal midpoint
-    const t=el('text',{x:midx,y:ly,'font-size':7.5,fill:CLS[cls]||COL.hud,'text-anchor':'middle',opacity:.75,'letter-spacing':'.04em'},label);
+  if(label){
+    const t=el('text',{x:lx,y:ly,'font-size':7.5,fill:CLS[cls]||COL.hud,'text-anchor':'middle',opacity:.75,'letter-spacing':'.04em'},label);
     world.appendChild(t); }
 }
 function card(world,n,big){
@@ -1084,6 +1105,11 @@ function zoomBtn(f){const b=stage.getBoundingClientRect(),cx=b.width/2,cy=b.heig
 document.getElementById('zin').onclick=()=>zoomBtn(1.2);
 document.getElementById('zout').onclick=()=>zoomBtn(1/1.2);
 document.getElementById('zfit').onclick=fit;
+document.getElementById('zorient').onclick=()=>{        // swap layout axes, re-lay-out, re-fit
+  orient=orient==='h'?'v':'h';
+  try{ localStorage.setItem('topoOrient',orient); }catch(e){}
+  if(TOPO){ laidOut=false; layout(); fit(); }
+};
 window.addEventListener('resize',()=>{if(TOPO&&laidOut)fit();});
 
 // ============ RIGHT-CLICK: open/generate a machine's topology ============
