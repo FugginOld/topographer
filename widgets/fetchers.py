@@ -110,7 +110,29 @@ def proxmox(cfg: dict) -> dict:
         "lxc": run("lxc"), "lxc_total": tot("lxc"),
         "cpu_pct": round(sum(_num(n.get("cpu")) for n in nodes) / maxcpu * 100, 1),
         "mem_pct": round(sum(_num(n.get("mem")) for n in nodes) / maxmem * 100, 1),
+        "tree": _pve_tree(nodes, res),   # per-node VMs/LXC for the widget's tree view
     }
+
+
+def _pve_tree(nodes: list, res: list) -> list:
+    """[{node,status,cpu,mem,guests:[{name,kind,status,cpu,mem,uptime,vmid}]}], running guests first."""
+    guests = [r for r in res if r.get("type") in ("qemu", "lxc")]
+    pct = lambda used, mx: round(_num(used) / (_num(mx) or 1) * 100, 1)
+    tree = []
+    for n in sorted(nodes, key=lambda x: (x.get("node") or "")):
+        nn = n.get("node")
+        gs = [{"name": g.get("name") or f'{g["type"]}{g.get("vmid")}',
+               "kind": "VM" if g["type"] == "qemu" else "LXC",
+               "vmid": g.get("vmid"), "status": g.get("status"),
+               "cpu": round(_num(g.get("cpu")) * 100, 1),
+               "mem": pct(g.get("mem"), g.get("maxmem")),
+               "uptime": int(_num(g.get("uptime")))}
+              for g in guests if g.get("node") == nn]
+        gs.sort(key=lambda x: (x["status"] != "running", x["name"].lower()))
+        tree.append({"node": nn, "status": n.get("status"),
+                     "cpu": round(_num(n.get("cpu")) * 100, 1),
+                     "mem": pct(n.get("mem"), n.get("maxmem")), "guests": gs})
+    return tree
 
 
 def unifi(cfg: dict) -> dict:
@@ -195,4 +217,16 @@ if __name__ == "__main__":   # ponytail: pure response->stats mapping, offline
                       "ads_percentage_today": 20.0, "domains_being_blocked": 9,
                       "status": "enabled"})["queries"] == 5
     assert _pihole_base("http://10.0.10.5/admin") == "http://10.0.10.5"
+    _res = [{"type": "node", "node": "pve", "status": "online", "cpu": 0.1, "mem": 4e9, "maxmem": 16e9},
+            {"type": "lxc", "node": "pve", "vmid": 101, "name": "adguard", "status": "running",
+             "cpu": 0.02, "mem": 2e8, "maxmem": 1e9, "uptime": 90000},
+            {"type": "qemu", "node": "pve", "vmid": 100, "name": "win11", "status": "stopped",
+             "cpu": 0, "mem": 0, "maxmem": 8e9, "uptime": 0},
+            {"type": "storage", "node": "pve", "status": "available"}]
+    _t = _pve_tree([_res[0]], _res)
+    assert len(_t) == 1 and _t[0]["node"] == "pve" and _t[0]["cpu"] == 10.0, _t
+    g = _t[0]["guests"]                                    # running sorts before stopped; storage excluded
+    assert [x["name"] for x in g] == ["adguard", "win11"], g
+    assert g[0]["kind"] == "LXC" and g[0]["mem"] == 20.0 and g[1]["kind"] == "VM", g
+    print("widgets/fetchers proxmox tree self-check ok")
     print("widgets/fetchers pihole self-check ok")

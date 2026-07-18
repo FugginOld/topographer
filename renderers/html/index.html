@@ -148,6 +148,20 @@
   .wk{color:var(--hud-dim)}
   .wv{color:var(--ink);font-variant-numeric:tabular-nums}
   .wb-empty{font-size:9.5px;color:var(--hud-dim);padding:4px 0;line-height:1.5}
+  /* Proxmox widget: nodes with their VMs/LXC nested underneath */
+  .pve-node{margin-top:8px}
+  .pve-nh{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.06em;color:var(--hud);
+    text-transform:uppercase;padding-bottom:3px;border-top:1px solid var(--line);padding-top:7px}
+  .pve-nh .nn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pve-nh .nm{margin-left:auto;font-size:8.5px;letter-spacing:0;text-transform:none;color:var(--hud-dim);font-variant-numeric:tabular-nums}
+  .pve-g{display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;color:var(--ink)}
+  .pve-g.off{opacity:.5}
+  .pve-g .kd{flex:0 0 auto;font-size:6.5px;letter-spacing:.06em;padding:1px 3px;border-radius:3px;border:1px solid var(--line);color:var(--hud-dim)}
+  .pve-g .gn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pve-g .gs{flex:0 0 auto;font-size:8.5px;color:var(--hud-dim);font-variant-numeric:tabular-nums}
+  .pve-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:#3fbf6a}
+  .pve-dot.off{background:var(--hud-dim)}
+  .pve-empty{font-size:8.5px;color:var(--hud-dim);padding:2px 0 2px 13px;opacity:.7}
   /* catalog + config form (shown in the shared notice modal) */
   .wcat{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;max-width:470px;max-height:66vh;overflow:auto}
   .wc-card{background:var(--card-fill);border:1px solid var(--line);border-radius:6px;padding:11px 10px;cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px}
@@ -1251,6 +1265,32 @@ function wvFmt(k,v){
   if(typeof v==='number') return v.toLocaleString();
   return String(v);
 }
+const pveUp=s=>{ s=s|0; if(s<60)return ''; const d=s/86400|0,h=(s%86400)/3600|0,m=(s%3600)/60|0;
+  return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m'; };
+// Proxmox widget: nodes, each with its VMs / LXC nested underneath (labels untrusted -> hel uses textContent)
+function pveTree(tree){
+  const wrap=hel('div','pve-tree');
+  tree.forEach(n=>{
+    const nd=hel('div','pve-node'), h=hel('div','pve-nh');
+    h.appendChild(hel('span','pve-dot'+(n.status==='online'?'':' off')));
+    h.appendChild(hel('span','nn',n.node||'node'));
+    h.appendChild(hel('span','nm',Math.round(n.cpu)+'% · '+Math.round(n.mem)+'%'));
+    nd.appendChild(h);
+    (n.guests||[]).forEach(g=>{
+      const on=g.status==='running', r=hel('div','pve-g'+(on?'':' off'));
+      r.appendChild(hel('span','pve-dot'+(on?'':' off')));
+      r.appendChild(hel('span','kd',g.kind));
+      r.appendChild(hel('span','gn',g.name));
+      const up=pveUp(g.uptime);
+      r.appendChild(hel('span','gs',on?(Math.round(g.cpu)+'% · '+Math.round(g.mem)+'%'):'off'));
+      r.title=(g.name||'')+(g.vmid?' ('+g.vmid+')':'')+(on&&up?' · up '+up:'');
+      nd.appendChild(r);
+    });
+    if(!(n.guests||[]).length) nd.appendChild(hel('div','pve-empty','no guests'));
+    wrap.appendChild(nd);
+  });
+  return wrap;
+}
 function widgetPanel(w,type){
   const card=hel('div','wcard'); card.dataset.wid=w.id;
   const head=hel('div','whead'), data=w.data||{}, keys=Object.keys(data);
@@ -1263,7 +1303,9 @@ function widgetPanel(w,type){
   head.appendChild(test); head.appendChild(edit); head.appendChild(del); card.appendChild(head);
   const body=hel('div','wbody');
   if(!keys.length) body.appendChild(hel('div','wb-empty','No data — check the widget’s URL / credentials.'));
-  else keys.forEach(k=>{ const r=hel('div','wrow'); r.appendChild(hel('span','wk',wkLabel(k))); r.appendChild(hel('span','wv',wvFmt(k,data[k]))); body.appendChild(r); });
+  else keys.forEach(k=>{ const v=data[k]; if(v&&typeof v==='object') return;   // nested (e.g. proxmox tree) rendered separately
+    const r=hel('div','wrow'); r.appendChild(hel('span','wk',wkLabel(k))); r.appendChild(hel('span','wv',wvFmt(k,v))); body.appendChild(r); });
+  if(w.type==='proxmox'&&Array.isArray(data.tree)&&data.tree.length) body.appendChild(pveTree(data.tree));
   card.appendChild(body); return card;
 }
 async function testWidget(w,dot){

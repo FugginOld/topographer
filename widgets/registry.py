@@ -31,7 +31,7 @@ CATALOG = [
     },
     {
         "id": "proxmox", "label": "Proxmox VE", "category": "System", "icon": "proxmox",
-        "desc": "Node health, running VMs / LXC, CPU + memory.",
+        "desc": "Node health plus each node's VMs / LXC, with CPU + memory.",
         "config_key": "proxmox",     # inherit config.yaml's proxmox block when the form is blank
         "fields": [
             {"name": "url", "label": "PVE URL", "type": "url"},
