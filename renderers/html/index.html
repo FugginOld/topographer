@@ -342,9 +342,12 @@ function setTheme(t){
 }
 const SKINS=[...document.getElementById('skin').options].map(o=>o.value);
 const wanted=location.hash.slice(1);   // deep-link a skin: dashboard/#unraid-dark
-const stored=(()=>{try{return localStorage.getItem('skin');}catch(e){return null;}})();   // null = never chosen
-// validate both against the current skin list — a value saved from a retired skin falls back to default.
-// Unraid Dark is the default; an explicit choice (incl. "" = Neutral Dark) is kept.
+let stored=(()=>{try{return localStorage.getItem('skin');}catch(e){return null;}})();   // null = never chosen
+// One-time migration: older builds auto-saved a skin on every load, so returning browsers already hold a
+// stale value that masked the new default. On first run under this build, drop that value once and adopt
+// Unraid Dark; after that an explicit choice (incl. "" = Neutral Dark) is kept.
+try{ if(!localStorage.getItem('skinDefaultUnraid')){ localStorage.setItem('skinDefaultUnraid','1'); stored=null; } }catch(e){}
+// validate against the current skin list — a value saved from a retired skin falls back to the default.
 setTheme(SKINS.includes(wanted)?wanted:(stored!=null&&SKINS.includes(stored)?stored:'unraid-dark'));
 document.getElementById('skin').value=document.body.dataset.theme||'';
 document.getElementById('skin').onchange=e=>setTheme(e.target.value);
