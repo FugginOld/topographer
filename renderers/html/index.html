@@ -386,7 +386,7 @@ function renderList(){
     d.appendChild(hel('div','mt',(t.modules||0)+' modules · '+when));
     d.onclick=e=>{ if(e.target.classList.contains('del')||e.target.classList.contains('exp'))return; selectTopo(t.id); };
     d.querySelector('.del').onclick=e=>{e.stopPropagation();delTopo(t);};
-    d.querySelector('.exp').onclick=e=>{e.stopPropagation();location.href='api/export?id='+encodeURIComponent(t.id);};
+    d.querySelector('.exp').onclick=e=>{e.stopPropagation();location.href='api/export?format=html&id='+encodeURIComponent(t.id);};
     list.appendChild(d);
   };
   const section=label=>{ const h=document.createElement('div'); h.className='section'; h.textContent=label; list.appendChild(h); };
@@ -439,7 +439,7 @@ document.getElementById('netbtn').onclick=async e=>{
   }catch(err){ showErr('network scan failed:<br><br><code>'+esc(err.message)+'</code>'); }
   finally{ btn.disabled=false; btn.textContent='⊹ Scan Network'; }
 };
-document.getElementById('expbtn').onclick=()=>{ location.href='api/export'; };
+document.getElementById('expbtn').onclick=()=>{ location.href='api/export?format=html'; };
 function spaced(s){return (s||'').toUpperCase().split('').join(' ');}
 
 // ================= VIEW: topology <-> native gateway dashboard =================
