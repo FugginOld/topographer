@@ -20,6 +20,7 @@ import http.server
 import ipaddress
 import json
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -458,6 +459,32 @@ def host_telemetry(tid: str) -> dict:
     return {**_tele.ZERO, "stale": True}   # remote + no fresh push -> zeros (not stale data, by design)
 
 
+def export_bundle(tid: str) -> dict:
+    """Everything the server knows about one host, for a diagnostic download: the
+    stored topology plus its live/last-pushed telemetry, services and glances. Each
+    source is best-effort — a failing one becomes an {"error": ...} stub so the
+    bundle is always complete enough to attach to a bug report."""
+    def _try(fn):
+        try:
+            return fn()
+        except Exception as e:
+            return {"error": str(e)}
+    return {
+        "id": tid,
+        "exported": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "topology": _try(lambda: store.load(tid)),
+        "telemetry": _try(lambda: host_telemetry(tid)),
+        "services": _try(lambda: host_services(tid)),
+        "glances": _try(lambda: glances_stats(tid)),
+    }
+
+
+def export_all() -> dict:
+    """Whole-dashboard diagnostic: one bundle per stored host."""
+    return {"exported": time.strftime("%Y-%m-%dT%H:%M:%S"), "server": server_ip(),
+            "hosts": [export_bundle(tid) for tid in store.ids()]}
+
+
 # ── Widget Store: per-host service widgets. Config (incl. secrets) lives in
 # widget_store (gitignored out/); the server does every outbound API call and
 # masks secret fields on the way out, so keys never reach the browser. ──────────
@@ -545,6 +572,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_download(self, filename: str, obj) -> None:
+        # filename is sanitized to a safe charset -> no Content-Disposition header injection
+        fn = re.sub(r"[^A-Za-z0-9._-]", "-", filename) or "export.json"
+        body = json.dumps(obj, indent=2).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Disposition", f'attachment; filename="{fn}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         # agent client + its installer, served from this server (not github) so a
         # fresh machine bootstraps entirely from the dashboard it reports to.
@@ -588,6 +626,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path.split("?")[0] == "/api/widgets":
             host = store.stable_slug(parse_qs(urlparse(self.path).query).get("host", [""])[0])
             return self._send(200, widgets_list(host))
+        if self.path.split("?")[0] == "/api/export":
+            tid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
+            if tid:   # single host: store.load inside export_bundle is path-guarded
+                return self._send_download(f"topo-{tid}-{time.strftime('%Y%m%d')}.json",
+                                           export_bundle(tid))
+            return self._send_download(f"dashboard-{time.strftime('%Y%m%d')}.json", export_all())
         if self.path.startswith("/t/"):
             tid = os.path.basename(self.path.split("?")[0])[:-5]  # strip .json
             try:

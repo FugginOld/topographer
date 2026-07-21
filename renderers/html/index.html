@@ -37,11 +37,11 @@
   #sidebar .head .brand .core{fill:#4CC6C6}                    /* teal core stays brand-constant */
   #sidebar .head h2{font-size:12px;letter-spacing:.24em;color:var(--hud);text-shadow:0 0 10px rgba(var(--glow),.4)}
   #sidebar .head .sub{font-size:8.5px;color:var(--hud-dim);letter-spacing:.12em;margin-top:5px}
-  #addbtn,#netbtn{margin:12px 14px;padding:9px 8px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
+  #addbtn,#netbtn,#expbtn{margin:12px 14px;padding:9px 8px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
     color:var(--hud);font-family:inherit;font-size:10px;letter-spacing:.1em;text-transform:uppercase;text-align:center;
     white-space:nowrap;cursor:pointer;transition:.15s;display:block;width:calc(100% - 28px)}
-  #netbtn{margin-top:0}
-  #addbtn:hover,#netbtn:hover{border-color:var(--hud);background:rgba(var(--glow),.08);box-shadow:0 0 14px rgba(var(--glow),.15)}
+  #netbtn,#expbtn{margin-top:0}
+  #addbtn:hover,#netbtn:hover,#expbtn:hover{border-color:var(--hud);background:rgba(var(--glow),.08);box-shadow:0 0 14px rgba(var(--glow),.15)}
   #addbtn:disabled,#netbtn:disabled{opacity:.5;cursor:wait}
   #list{flex:1;overflow-y:auto;padding:0 10px}
   #list .empty{padding:20px 12px;font-size:9px;color:var(--hud-dim);letter-spacing:.08em;line-height:1.8;text-align:center}
@@ -57,6 +57,8 @@
   #list .section:first-child{margin-top:2px}
   .item .del{position:absolute;top:9px;right:9px;width:16px;height:16px;border:none;background:transparent;color:var(--hud-dim);cursor:pointer;font-size:13px;line-height:1;opacity:0;transition:.15s}
   .item:hover .del{opacity:1} .item .del:hover{color:var(--crit)}
+  .item .exp{position:absolute;top:9px;right:28px;width:16px;height:16px;border:none;background:transparent;color:var(--hud-dim);cursor:pointer;font-size:12px;line-height:1;opacity:0;transition:.15s}
+  .item:hover .exp{opacity:1} .item .exp:hover{color:var(--hud)}
   #sidebar .foot{padding:4px 16px 12px;font-size:8px;color:var(--hud-dim);letter-spacing:.1em;line-height:1.7}
   #skin{width:100%;padding:6px 8px;background:var(--panel);color:var(--hud);border:1px solid var(--line);border-radius:4px;
     font-family:inherit;font-size:9px;letter-spacing:.1em;cursor:pointer}
@@ -265,6 +267,7 @@
   </div>
   <button id="addbtn">+ Generate Current Machine</button>
   <button id="netbtn">⊹ Scan Network</button>
+  <button id="expbtn" title="download a diagnostic bundle of every host">⭳ Export Diagnostics</button>
   <div id="list"></div>
   <div id="legend">lane class
     <div><i style="background:var(--gen5)"></i>Gen5</div>
@@ -376,12 +379,14 @@ function renderList(){
     d.className='item'+(t.id===activeId?' active':'');
     const when=(t.generated||'').replace('T',' ').slice(0,16);
     const del=hel('button','del'); del.title='delete'; del.textContent='×';
-    d.appendChild(del);
+    const exp=hel('button','exp'); exp.title='export diagnostics'; exp.textContent='⭳';
+    d.appendChild(del); d.appendChild(exp);
     d.appendChild(hel('div','nm',t.name||t.id));            // host-supplied name -> textContent
     if(t.ip) d.appendChild(hel('div','ip',t.ip));
     d.appendChild(hel('div','mt',(t.modules||0)+' modules · '+when));
-    d.onclick=e=>{ if(e.target.classList.contains('del'))return; selectTopo(t.id); };
+    d.onclick=e=>{ if(e.target.classList.contains('del')||e.target.classList.contains('exp'))return; selectTopo(t.id); };
     d.querySelector('.del').onclick=e=>{e.stopPropagation();delTopo(t);};
+    d.querySelector('.exp').onclick=e=>{e.stopPropagation();location.href='api/export?id='+encodeURIComponent(t.id);};
     list.appendChild(d);
   };
   const section=label=>{ const h=document.createElement('div'); h.className='section'; h.textContent=label; list.appendChild(h); };
@@ -434,6 +439,7 @@ document.getElementById('netbtn').onclick=async e=>{
   }catch(err){ showErr('network scan failed:<br><br><code>'+esc(err.message)+'</code>'); }
   finally{ btn.disabled=false; btn.textContent='⊹ Scan Network'; }
 };
+document.getElementById('expbtn').onclick=()=>{ location.href='api/export'; };
 function spaced(s){return (s||'').toUpperCase().split('').join(' ');}
 
 // ================= VIEW: topology <-> native gateway dashboard =================
