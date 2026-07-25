@@ -30,8 +30,34 @@ jobs:
         run: python tests/test_pipeline.py
       - name: Card contract + network-cards adapter
         run: python tests/test_cards.py
+      - name: Dashboard routing (boots the server on a free port)
+        run: python tests/test_routes.py
+      - name: UniFi transforms + request path
+        run: python -m collectors.unifi
+      # module self-checks — each module's __main__ asserts its own contract, offline.
+      # Keep this list identical to CONTRIBUTING.md → Tests.
+      - name: Path-injection barrier (shared by both stores)
+        run: python renderers/html/_guard.py
+      - name: Push-freshness cache (live/stale/miss)
+        run: python renderers/html/pushcache.py
       - name: Store path-injection barrier + slug policy
         run: python renderers/html/store.py
+      - name: Widget store CRUD round-trip
+        run: python renderers/html/widget_store.py
+      - name: Service-icon slug candidates
+        run: python renderers/html/icons.py
+      - name: Agent bundle builder (tar.gz/zip)
+        run: python renderers/html/agent_bundle.py
+      - name: Collector HTTP transport (ssl ctx + get_json)
+        run: python collectors/transport.py
+      - name: Widget SSRF guard
+        run: python -m widgets.net
+      - name: Widget engine (auth/mapping)
+        run: python -m widgets.engine
+      - name: Widget stat parsers
+        run: python -m widgets.fetchers
+      - name: Widget catalog integrity + merge
+        run: python -m widgets.registry
       - name: Linux collector self-test
         run: python scanners/make_linux_topo.py --selftest
 

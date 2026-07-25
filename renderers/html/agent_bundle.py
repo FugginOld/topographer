@@ -4,7 +4,7 @@ run the client code from THIS server, not github.
 
 Lifted out of topo_server.py: a pure bytes producer over the repo tree. To ship
 new agent-side code to clients, edit AGENT_PATHS here, restart the server, then
-re-run bootstrap on the client (see CLAUDE.md → Conventions).
+re-run bootstrap on the client (see CONTRIBUTING.md → gotcha 8).
 """
 from __future__ import annotations
 

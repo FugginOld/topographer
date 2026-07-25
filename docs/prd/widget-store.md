@@ -1,6 +1,6 @@
 # PRD — Widget Store
 
-Status: draft · Owner: FugginOld · Related: `CONTEXT.md` (domain), `CLAUDE.md` (hard rules)
+Status: draft · Owner: FugginOld · Related: `CONTEXT.md` (domain), `CONTRIBUTING.md` (gotchas)
 
 ## Problem
 
