@@ -83,6 +83,47 @@ SNMP = [
 ]
 
 
+def _fake_collectors():
+    """Two collectors: one that fails the way a misconfigured source really does
+    (opnsense.py:38 / unifi.py:314 raise KeyError on a missing config key, and
+    zones() used to run outside the runner's guard), one healthy."""
+    from collectors.base import Collector
+
+    class Boom(Collector):
+        name = "boom"
+
+        def collect(self):
+            return [{"name": "ghost", "ip": "10.0.30.8"}]
+
+        def zones(self):
+            raise KeyError("key")           # enabled: true, but no api key configured
+
+    class Bare(Collector):
+        name = "bare"
+
+        def collect(self):
+            return [{"name": "unstamped", "ip": "10.0.30.9"}]   # never calls _tag()
+
+    return {"boom": Boom, "bare": Bare}
+
+
+def test_a_failing_source_cannot_kill_the_scan():
+    from scanners.make_network_topo import run_collectors
+    cfg = {"boom": {"enabled": True}, "bare": {"enabled": True}}
+    raw, zones = run_collectors(cfg, _fake_collectors())
+    assert "unstamped" in [r.get("name") for r in raw], raw
+    assert zones == [], zones
+
+
+def test_runner_stamps_the_contract_even_when_a_collector_forgets():
+    """pingsweep.py:81 returns nodes without _tag(), so they landed as
+    source='unknown' with no last_seen. The runner stamps both."""
+    from scanners.make_network_topo import run_collectors
+    raw, _ = run_collectors({"bare": {"enabled": True}}, _fake_collectors())
+    assert raw[0]["source"] == "bare", raw
+    assert raw[0].get("last_seen"), raw
+
+
 def test_link_by_name_reaches_an_ip_keyed_node():
     topo = normalize(SNMP, ZONES)
     assert len(topo.links) == 1, f"switch-port link was dropped: {topo.links}"

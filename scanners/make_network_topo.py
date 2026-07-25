@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 
 from core.normalize import normalize
 from core.enrich import enrich
+from core.schema import now_iso
 
 # collector registry: name -> (module path, class)
 from collectors.arpscan import ArpScanCollector
@@ -56,6 +57,49 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(fh) or {}
 
 
+def run_collectors(cfg: dict, collectors: dict, outdir: str | None = None):
+    """Run every enabled collector -> (raw items, raw zones).
+
+    Where the Collector contract is actually enforced, rather than described:
+      - a source that fails contributes nothing and never stops the scan — and
+        that covers zones() too, which used to run outside the guard, so one
+        misconfigured collector (a missing api key) killed the whole run;
+      - source and last_seen are stamped here, so a collector that forgets
+        _tag() can't land nodes as source="unknown" with no age.
+    """
+    raw_items: list[dict] = []
+    zones_raw: list[dict] = []
+    ts = now_iso()
+    for name, cls in collectors.items():
+        try:
+            c = cls(cfg.get(name, {}))
+            if not c.enabled:
+                log.info("skip %s (disabled)", name)
+                continue
+        except Exception as e:
+            log.error("%s could not start: %s", name, e)
+            continue
+        log.info("collect %s", name)
+        try:
+            items = c.collect() or []
+        except Exception as e:  # last-resort guard
+            log.error("%s crashed: %s", name, e)
+            items = []
+        for it in items:
+            if isinstance(it, dict):
+                it.setdefault("source", name)
+                if it.get("kind") != "link":
+                    it.setdefault("last_seen", ts)
+        if outdir:
+            c.dump_raw(items, outdir)
+        raw_items.extend(items)
+        try:
+            zones_raw.extend(c.zones() or [])
+        except Exception as e:      # a source can define zones badly without killing the scan
+            log.error("%s zones failed: %s", name, e)
+    return raw_items, zones_raw
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
@@ -70,23 +114,7 @@ def main() -> None:
     cfg = load_config(args.config)
     os.makedirs(args.outdir, exist_ok=True)
 
-    raw_items: list[dict] = []
-    zones_raw: list[dict] = []
-
-    for name, cls in COLLECTORS.items():
-        c = cls(cfg.get(name, {}))
-        if not c.enabled:
-            log.info("skip %s (disabled)", name)
-            continue
-        log.info("collect %s", name)
-        try:
-            items = c.collect()
-        except Exception as e:  # last-resort guard
-            log.error("%s crashed: %s", name, e)
-            items = []
-        c.dump_raw(items, args.outdir)
-        raw_items.extend(items)
-        zones_raw.extend(c.zones())
+    raw_items, zones_raw = run_collectors(cfg, COLLECTORS, args.outdir)
 
     # zones defined in config override/augment discovered ones
     for z in cfg.get("static_zones", []):

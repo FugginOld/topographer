@@ -45,6 +45,8 @@ python renderers/html/pushcache.py               # push-freshness cache (live/st
 python renderers/html/store.py                   # store slug policy + save/load
 python renderers/html/widget_store.py            # widget store CRUD round-trip
 python renderers/html/icons.py                   # service-icon slug candidates
+python renderers/html/report.py                  # diagnostic HTML report escaping
+python renderers/html/pve_tiles.py               # proxmox guests -> dashboard tiles
 python renderers/html/agent_bundle.py            # agent tar.gz/zip builder
 python collectors/transport.py                   # shared collector HTTP (ssl ctx + get_json)
 python -m widgets.net                            # widget SSRF guard

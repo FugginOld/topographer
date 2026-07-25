@@ -48,6 +48,10 @@ jobs:
         run: python renderers/html/widget_store.py
       - name: Service-icon slug candidates
         run: python renderers/html/icons.py
+      - name: HTML report escaping
+        run: python renderers/html/report.py
+      - name: Proxmox guest tiles
+        run: python renderers/html/pve_tiles.py
       - name: Agent bundle builder (tar.gz/zip)
         run: python renderers/html/agent_bundle.py
       - name: Collector HTTP transport (ssl ctx + get_json)

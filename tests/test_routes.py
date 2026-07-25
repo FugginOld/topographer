@@ -86,6 +86,10 @@ def test_routes():
         # request-derived can reach the Content-Disposition filename
         for bad in ("../../etc/passwd", "x%0d%0aSet-Cookie:+a%3db", 'a"b', "nope"):
             assert _get(port, f"/api/export?id={bad}")[0] == 404, bad
+        st, body = _get(port, "/api/export?format=html")          # printable report
+        assert st == 200 and body.lstrip().startswith(b"<!doctype html>"), (st, body[:120])
+        assert b'id="raw"' in body and b"Download raw JSON" in body, "report lost its payload"
+
         st, hdrs = _download_headers(port, "/api/export")         # whole-dashboard export
         assert st == 200, st
         cd = hdrs.get("Content-Disposition", "")
