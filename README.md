@@ -150,6 +150,9 @@ bootstrap.ps1            agent one-liner install (Windows): scheduled task, zip-
 python tests/test_pipeline.py      # no live network; uses fixtures
 ```
 
+Every check CI runs is listed in [CONTRIBUTING.md](CONTRIBUTING.md) — all offline, seconds to run.
+
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 FugginOld. Covers everything in this repository, including the
+Unraid Community Applications template in `docker/`.
