@@ -4,7 +4,7 @@
     python make_network_topo.py --config config.yaml
 
 Pipeline: run enabled collectors (read-only) -> dump raw -> normalize into a
-canonical Topology -> enrich (vendor/kind/aging) -> render (json/mermaid/svg).
+canonical Topology -> enrich (vendor/kind/aging) -> topo.json for the dashboard.
 Every stage degrades gracefully; a down source yields a partial map, not a crash.
 """
 from __future__ import annotations
@@ -18,7 +18,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 
 from core.normalize import normalize
 from core.enrich import enrich
-from renderers import mermaid, static_svg
 
 # collector registry: name -> (module path, class)
 from collectors.arpscan import ArpScanCollector
@@ -96,15 +95,8 @@ def main() -> None:
     topo = normalize(raw_items, _dedupe_zones(zones_raw))
     topo = enrich(topo, cfg.get("offline_after_minutes", 30))
 
-    # renders
     json_path = os.path.join(args.outdir, "topo.json")
     topo.dump(json_path)
-    mermaid.write(topo, os.path.join(args.outdir, "topo.mmd"))
-    static_svg.write(
-        topo,
-        os.path.join(args.outdir, "topology.dot"),
-        os.path.join(args.outdir, "topo.svg"),
-    )
     log.info("wrote %s (%d nodes, %d links, %d zones)",
              json_path, len(topo.nodes), len(topo.links), len(topo.zones))
     print(f"\n  topo.json ready -> serve it:  python renderers/html/topo_server.py")

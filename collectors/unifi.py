@@ -304,50 +304,38 @@ class UnifiCollector(Collector):
         self._opener = op
         return op
 
-    def _get(self, path: str):
+    def _req(self, path: str, body: dict | None = None):
+        """Site-API call. GET (no body) -> the .data list; POST -> the whole body.
+        Never raises: [] / {} on any failure, matching the collector contract."""
+        empty = {} if body is not None else []
         op = self._build_opener()
         if op is None:
-            return []
-        url = self.cfg["url"].rstrip("/")
-        site = self.cfg.get("site", "default")
-        req = urllib.request.Request(f"{url}/proxy/network/api/s/{site}/{path}")
+            return empty
+        url = f"{self.cfg['url'].rstrip('/')}/proxy/network/api/s/{self.cfg.get('site', 'default')}/{path}"
+        req = urllib.request.Request(
+            url, data=None if body is None else json.dumps(body).encode(),
+            headers={} if body is None else {"Content-Type": "application/json"},
+            method=None if body is None else "POST")
         if self._api_key():
             req.add_header("X-API-KEY", self._api_key())
         try:
             with op.open(req, timeout=20) as r:
-                return json.load(r).get("data", [])
+                d = json.load(r)
+                return d if body is not None else d.get("data", [])
         except (urllib.error.URLError, ValueError) as e:
-            log.warning("unifi GET %s failed: %s", path, e)
-            return []
-
-    def _post(self, path: str, body: dict) -> dict:
-        op = self._build_opener()
-        if op is None:
-            return {}
-        url = self.cfg["url"].rstrip("/")
-        site = self.cfg.get("site", "default")
-        req = urllib.request.Request(f"{url}/proxy/network/api/s/{site}/{path}",
-                                     data=json.dumps(body).encode(),
-                                     headers={"Content-Type": "application/json"}, method="POST")
-        if self._api_key():
-            req.add_header("X-API-KEY", self._api_key())
-        try:
-            with op.open(req, timeout=20) as r:
-                return json.load(r)
-        except (urllib.error.URLError, ValueError) as e:
-            log.warning("unifi POST %s failed: %s", path, e)
-            return {}
+            log.warning("unifi %s %s failed: %s", req.get_method(), path, e)
+            return empty
 
     def run_speedtest(self) -> dict:
         """Kick off a WAN speedtest; results land in the next stat/health (~30s)."""
-        return self._post("cmd/devmgr", {"cmd": "speedtest"})
+        return self._req("cmd/devmgr", {"cmd": "speedtest"})
 
     def _fetch(self):
         """Pull all three lists once; reused by zones() and collect()."""
         if self._nets is None:
-            self._nets = self._get("rest/networkconf")
-            self._clients = self._get("stat/sta")
-            self._devices = self._get("stat/device")
+            self._nets = self._req("rest/networkconf")
+            self._clients = self._req("stat/sta")
+            self._devices = self._req("stat/device")
 
     # ---- Collector API -------------------------------------------------------
     def zones(self) -> list[dict]:
@@ -364,9 +352,9 @@ class UnifiCollector(Collector):
 
     def dashboard(self) -> dict:
         """Live gateway summary for the dashboard panel. Uses the same authed
-        _get as collect(); empty API lists just yield an empty summary."""
-        return health_summary(self._get("stat/health"),
-                              self._get("stat/device"), self._get("stat/sta"))
+        _req as collect(); empty API lists just yield an empty summary."""
+        return health_summary(self._req("stat/health"),
+                              self._req("stat/device"), self._req("stat/sta"))
 
 
 def _probe() -> None:
@@ -387,12 +375,12 @@ def _probe() -> None:
     c = UnifiCollector(cfg)
     for path in ("stat/health", "stat/sysinfo", "stat/device", "stat/sta",
                  "rest/networkconf", "rest/wlanconf"):
-        data = c._get(path) or []
+        data = c._req(path) or []
         keys = sorted({k for o in data if isinstance(o, dict) for k in o})
         print(f"\n### {path}  ({len(data)} objects)")
         print(", ".join(keys) or "(no data / endpoint unavailable)")
     print("\n### stat/health FULL (redact public IPs / MACs before sharing) ###")
-    print(json.dumps(c._get("stat/health"), indent=2)[:4000])
+    print(json.dumps(c._req("stat/health"), indent=2)[:4000])
 
 
 if __name__ == "__main__":  # ponytail: transform self-check, no live controller
@@ -449,4 +437,24 @@ if __name__ == "__main__":  # ponytail: transform self-check, no live controller
     assert hs["gateway"]["uptime"] == "1d 1h", hs
     # gateway (gw_mac) is excluded from the devices list; the switch remains
     assert all(dv["name"] != "gw" for dv in hs["devices"]) and any(dv["kind"] == "switch" for dv in hs["devices"]), hs
+
+    # ---- one request path for GET and POST (stubbed opener, no controller) ----
+    import io
+    seen = []
+
+    class _FakeOpener:
+        def open(self, req, timeout=None):
+            seen.append(req)
+            return io.BytesIO(b'{"data": [{"x": 1}], "meta": {"rc": "ok"}}')
+
+    c = UnifiCollector({"url": "https://gw/", "api_key": "k", "site": "s"})
+    c._opener = _FakeOpener()                                    # skips login/network
+    assert c._req("stat/health") == [{"x": 1}]                   # GET unwraps .data
+    assert seen[-1].full_url == "https://gw/proxy/network/api/s/s/stat/health", seen[-1].full_url
+    assert seen[-1].get_method() == "GET" and seen[-1].get_header("X-api-key") == "k"
+    r = c._req("cmd/devmgr", {"cmd": "speedtest"})               # POST returns the whole body
+    assert r["meta"] == {"rc": "ok"}, r
+    assert seen[-1].get_method() == "POST" and json.loads(seen[-1].data) == {"cmd": "speedtest"}
+    c._opener = None                                             # no url/key -> login attempt fails, no raise
+    assert UnifiCollector({"url": "https://nope.invalid"})._req("stat/health") == []
     print("unifi transform self-check ok")

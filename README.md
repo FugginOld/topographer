@@ -11,8 +11,8 @@ I never could find a dashboard service I liked. So...using AI, I prompted what I
 Two topology tools in one repo:
 
 1. **Network topology** — auto-discover a homelab network from live sources,
-   normalize into one canonical model, render as an animated HTML dashboard,
-   Graphviz SVG, or git-diffable Mermaid. *(the original pipeline, below)*
+   normalize into one canonical model, render as an animated HTML dashboard.
+   *(the original pipeline, below)*
 2. **Hardware topology + fleet dashboard** — scan each machine's real hardware
    fabric (CPU, RAM, PCIe lanes, NVMe, NICs with link state, USB, displays) and
    watch every machine on your network from **one live dashboard**, with per-host
@@ -45,7 +45,7 @@ naming, tokens, troubleshooting — is in **[HOWTO.md](HOWTO.md)**.
 
 ```text
 sources ──▶ collectors ──▶ topo.json ──▶ renderers
-(live)      (read-only)     (canonical)       (html / svg / mermaid)
+(live)      (read-only)     (canonical)       (live dashboard)
 ```
 
 Every collector is read-only and emits raw dicts. `core/normalize.py` merges
@@ -75,7 +75,7 @@ cp config.example.yaml config.yaml         # edit — this file is gitignored
 ```
 
 Prefer the CLI? `python scanners/make_network_topo.py --config config.yaml` writes
-`out/topo.json` + `.svg` + `.mmd` directly.
+`out/topo.json` directly.
 
 **Adding a machine to the fleet:** right-click any host in the network map →
 *Generate machine topology*. If SSH remote-scan is configured it scans over SSH;
@@ -101,12 +101,10 @@ host seen by three collectors collapses into one. `unifi`/`proxmox`/`pingsweep`
 are **stdlib-only** (no `requests`); the gateway/API collectors auto-degrade to
 `[]` when their source is absent, so enabling several is safe.
 
-## Renderers
+## Renderer
 
 - **`renderers/html/`** — animated dashboard (VLAN zones, firewall hub, Tailscale
   overlay toggle, click-to-isolate). Reads `topo.json`; refreshes every 30s.
-- **`renderers/static_svg.py`** — Graphviz `dot` → SVG/PNG for README/wiki.
-- **`renderers/mermaid.py`** — `topo.mmd`, renders on GitHub, diffs cleanly.
 
 ## Automation
 
@@ -127,10 +125,10 @@ commit the tooling and `config.example.yaml` (dummy values). One accidental
 ```text
 collectors/   read-only source adapters (one file per source)
 core/         schema · normalize · enrich · detect (gateway fingerprint) · oui.csv
-renderers/    html/ (dashboard + topo_server.py) · static_svg.py · mermaid.py
+renderers/    html/ (dashboard + topo_server.py) · card.py · network_cards.py
 systemd/      units: topo-server (dashboard) · topo-agent · timer
 tests/        fixtures + end-to-end pipeline test
-scanners/make_network_topo.py   network topology orchestrator (collectors → renderers)
+scanners/make_network_topo.py   network topology orchestrator (collectors → topo.json)
 
 # hardware topology + fleet dashboard (see HOWTO.md)
 scanners/make_pc_topo.py      Windows hardware scan (PnP/CIM)
@@ -139,7 +137,8 @@ core/local_telemetry.py       shared live CPU/net/disk/temp sampler
 agent/topo_agent.py        push topology + telemetry to the server
 install.sh · uninstall.sh  set up / remove the dashboard as a Linux service
 agent/report.sh · agent/report.ps1   run the agent (self-updating)
-server/server.ps1        start the dashboard on Windows (firewall + topo_server.py)
+Dockerfile · docker-compose.yml · docker/topographer.xml
+                         run the dashboard as a container (incl. Unraid CA)
 bootstrap.sh             agent one-liner install (Linux/Unraid): systemd / go-script /
                          TOPO_ONCE snapshot — adapts to the host, git-free
 bootstrap.ps1            agent one-liner install (Windows): scheduled task, zip-fetch

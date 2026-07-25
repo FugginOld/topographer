@@ -95,13 +95,3 @@ class Topology:
     def dump(self, path: str) -> None:
         with open(path, "w") as fh:
             json.dump(self.to_dict(), fh, indent=2)
-
-    @classmethod
-    def load(cls, path: str) -> "Topology":
-        with open(path) as fh:
-            d = json.load(fh)
-        t = cls(generated=d.get("generated", now_iso()))
-        t.zones = [Zone(**z) for z in d.get("zones", [])]
-        t.nodes = [Node(**n) for n in d.get("nodes", [])]
-        t.links = [Link(**l) for l in d.get("links", [])]
-        return t

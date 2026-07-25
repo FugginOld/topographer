@@ -10,20 +10,16 @@
 <link rel="apple-touch-icon" href="apple-touch-icon-180.png">
 <style>
   /* ---- SKINS: every color lives in a CSS var; the SVG/JS read these too (see refreshColors()).
-         Flat themes only — solid panels, flat backgrounds, no glass/frost. A new skin = one
-         body[data-theme=...] block below. Neutral Dark is the :root default. ---- */
-  :root{--bg0:#15171c;--bg1:#15171c;--line:#2a2e38;--hud:#6f9bff;--hud-dim:#868c9b;--ink:#e8eaf0;
-    --ok:#3ecf8e;--warn:#ffc451;--crit:#ff5f6d;--gen5:#3ad0b4;--gen4:#6f9bff;--gen3:#3ecf8e;--panel:#181b21;
-    --glow:111,155,255;--down:#4a4f5a;--card-title:#e8eaf0;--card-fill:#1d2027;--card-fill-big:#1d2027;--bar-bg:#2a2e38;}
-  body[data-theme="neutral-light"]{--bg0:#eef0f3;--bg1:#eef0f3;--line:#e5e7ec;--hud:#3b6ef5;--hud-dim:#767b86;--ink:#1a1c22;
-    --ok:#22b36b;--warn:#b7791f;--crit:#c0392b;--gen5:#28c2a8;--gen4:#3b6ef5;--gen3:#22b36b;--panel:#ffffff;
-    --glow:59,110,245;--down:#c0c5cd;--card-title:#1a1c22;--card-fill:#ffffff;--card-fill-big:#ffffff;--bar-bg:#e5e7ec;}
-  body[data-theme="unraid-dark"]{--bg0:#191b1f;--bg1:#191b1f;--line:#333842;--hud:#ff8c2f;--hud-dim:#8b929c;--ink:#e7e9ec;
+         Two flat skins — dark (:root) and light. Which one is live follows the OS unless the
+         user picks one; either way the JS stamps body[data-theme], so no media query here. ---- */
+  :root{--bg0:#191b1f;--bg1:#191b1f;--line:#333842;--hud:#ff8c2f;--hud-dim:#8b929c;--ink:#e7e9ec;
     --ok:#5cbf3a;--warn:#ffc451;--crit:#e22828;--gen5:#e22828;--gen4:#ff8c2f;--gen3:#5cbf3a;--panel:#202329;
-    --glow:255,140,47;--down:#4a4f58;--card-title:#e7e9ec;--card-fill:#25282e;--card-fill-big:#25282e;--bar-bg:#333842;}
-  body[data-theme="unraid-light"]{--bg0:#eceded;--bg1:#eceded;--line:#dcdfe2;--hud:#c25e12;--hud-dim:#788089;--ink:#20232a;
+    --glow:255,140,47;--down:#4a4f58;--card-title:#e7e9ec;--card-fill:#25282e;--card-fill-big:#25282e;--bar-bg:#333842;
+    color-scheme:dark;}
+  body[data-theme="light"]{--bg0:#eceded;--bg1:#eceded;--line:#dcdfe2;--hud:#c25e12;--hud-dim:#788089;--ink:#20232a;
     --ok:#4ea72e;--warn:#b7791f;--crit:#e22828;--gen5:#e22828;--gen4:#ff8c2f;--gen3:#4ea72e;--panel:#f7f8f8;
-    --glow:255,140,47;--down:#b6bcc2;--card-title:#20232a;--card-fill:#ffffff;--card-fill-big:#ffffff;--bar-bg:#dcdfe2;}
+    --glow:255,140,47;--down:#b6bcc2;--card-title:#20232a;--card-fill:#ffffff;--card-fill-big:#ffffff;--bar-bg:#dcdfe2;
+    color-scheme:light;}
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{height:100%}
   body{background:radial-gradient(ellipse at 60% -20%,var(--bg1) 0%,var(--bg0) 62%),var(--bg0);
@@ -276,10 +272,9 @@
   <div class="foot">
     <label for="skin" style="display:block;margin-bottom:5px">skin</label>
     <select id="skin">
-      <option value="">neutral · dark</option>
-      <option value="neutral-light">neutral · light</option>
-      <option value="unraid-dark">unraid · dark</option>
-      <option value="unraid-light">unraid · light</option>
+      <option value="">auto · follow OS</option>
+      <option value="dark">dark</option>
+      <option value="light">light</option>
     </select>
     <div style="margin-top:8px">drag module · scroll zoom · drag bg to pan</div>
   </div>
@@ -338,21 +333,20 @@ function refreshColors(){
   COL.ok=g('--ok');COL.warn=g('--warn');COL.crit=g('--crit');COL.down=g('--down');
   COL.title=g('--card-title');COL.fill=g('--card-fill');COL.fillBig=g('--card-fill-big');COL.barBg=g('--bar-bg');
 }
+// '' = follow the OS; 'dark'/'light' = the user overrode it. data-theme is always stamped
+// concretely so the CSS needs no media query and refreshColors() sees real values.
+const DARKMQ=matchMedia('(prefers-color-scheme: dark)');
+let skinPref='';
 function setTheme(t){
-  if(t) document.body.dataset.theme=t; else delete document.body.dataset.theme;
-  try{ localStorage.setItem('skin',t||''); }catch(e){}
+  skinPref=(t==='dark'||t==='light')?t:'';                 // anything else (incl. a retired skin) = auto
+  try{ localStorage.setItem('skin',skinPref); }catch(e){}
+  document.body.dataset.theme=skinPref||(DARKMQ.matches?'dark':'light');
   refreshColors();
 }
-const SKINS=[...document.getElementById('skin').options].map(o=>o.value);
-const wanted=location.hash.slice(1);   // deep-link a skin: dashboard/#unraid-dark
-let stored=(()=>{try{return localStorage.getItem('skin');}catch(e){return null;}})();   // null = never chosen
-// One-time migration: older builds auto-saved a skin on every load, so returning browsers already hold a
-// stale value that masked the new default. On first run under this build, drop that value once and adopt
-// Unraid Dark; after that an explicit choice (incl. "" = Neutral Dark) is kept.
-try{ if(!localStorage.getItem('skinDefaultUnraid')){ localStorage.setItem('skinDefaultUnraid','1'); stored=null; } }catch(e){}
-// validate against the current skin list — a value saved from a retired skin falls back to the default.
-setTheme(SKINS.includes(wanted)?wanted:(stored!=null&&SKINS.includes(stored)?stored:'unraid-dark'));
-document.getElementById('skin').value=document.body.dataset.theme||'';
+DARKMQ.addEventListener('change',()=>{ if(!skinPref) setTheme(''); });
+const wanted=location.hash.slice(1);   // deep-link a skin: dashboard/#light
+setTheme(wanted||(()=>{try{return localStorage.getItem('skin')||'';}catch(e){return '';}})());
+document.getElementById('skin').value=skinPref;
 document.getElementById('skin').onchange=e=>setTheme(e.target.value);
 
 let TOPO=null;                 // {name,generated,nodes:[...]}
@@ -892,7 +886,6 @@ function fit(){
   applyView();
 }
 function applyView(){document.getElementById('zpct').textContent=Math.round(view.k*100)+'%';}
-function tcol(t){return t>=64?COL.crit:t>=55?COL.warn:COL.ok;}
 
 // card sizing: cards auto-expand to fit their label (capped so columns never collide), then
 // compress text as a last resort so nothing spills past the edge — works whatever mono font

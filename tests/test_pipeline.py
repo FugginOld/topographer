@@ -5,7 +5,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from core.normalize import normalize
 from core.enrich import enrich
 from core.schema import norm_mac
-from renderers import mermaid
 
 
 ZONES = [
@@ -44,12 +43,6 @@ def test_link_survives():
     assert "Gi1/0/5" in ports
 
 
-def test_mermaid_renders():
-    topo = enrich(normalize(RAW, ZONES))
-    text = mermaid.render(topo)
-    assert "flowchart TB" in text and "SERVERS" in text
-
-
 if __name__ == "__main__":
-    test_norm_mac(); test_vlan_assignment_and_merge(); test_link_survives(); test_mermaid_renders()
+    test_norm_mac(); test_vlan_assignment_and_merge(); test_link_survives()
     print("all tests passed")

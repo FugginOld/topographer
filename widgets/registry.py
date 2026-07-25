@@ -89,11 +89,6 @@ def secret_fields(type_id: str) -> list[str]:
     return [f["name"] for f in (_BY_ID.get(type_id) or {}).get("fields", []) if f.get("secret")]
 
 
-def catalog_public() -> list[dict]:
-    """Catalog minus the fetch callables — JSON-safe for the browser."""
-    return [{k: v for k, v in t.items() if k != "fetch"} for t in CATALOG]
-
-
 def full_catalog() -> list[dict]:
     """The whole browsable store: every Homepage widget from catalog.json, merged
     with our built ones. Built types carry their real field schema (installable);
@@ -103,28 +98,29 @@ def full_catalog() -> list[dict]:
     except Exception:
         allw = []
     built = {t["id"]: t for t in CATALOG}
-    out, seen = [], set()
-    for w in allw:
-        wid = w.get("id")
-        if not wid or wid in seen:
-            continue
-        seen.add(wid)
+
+    def row(wid: str, w: dict) -> dict:
+        """One store row. `w` is the catalog.json entry ({} for a built type the
+        cache doesn't list); a built type overrides it with its real schema."""
         b = built.get(wid)
+        r = {"id": wid, "label": w.get("title") or wid, "category": w.get("category") or "Other",
+             "icon": wid, "built": False, "desc": w.get("note") or "",
+             "shows": w.get("shows") or [], "doc": w.get("doc"), "config": w.get("config") or []}
         if b:
-            out.append({"id": wid, "label": b["label"], "category": b.get("category") or w.get("category") or "Other",
-                        "icon": b.get("icon") or wid, "built": True, "beta": bool(b.get("beta")),
-                        "desc": b.get("desc") or w.get("note") or "", "shows": w.get("shows") or [], "doc": w.get("doc"),
-                        "fields": [dict(f) for f in b["fields"]], "config_key": b.get("config_key")})
-        else:
-            out.append({"id": wid, "label": w.get("title") or wid, "category": w.get("category") or "Other",
-                        "icon": wid, "built": False, "desc": w.get("note") or "",
-                        "shows": w.get("shows") or [], "doc": w.get("doc"), "config": w.get("config") or []})
-    for wid, b in built.items():                         # our built types not in the cache (e.g. seerr)
-        if wid not in seen:
-            out.append({"id": wid, "label": b["label"], "category": b.get("category") or "Other",
-                        "icon": b.get("icon") or wid, "built": True, "beta": bool(b.get("beta")),
-                        "desc": b.get("desc") or "", "shows": [], "doc": None,
-                        "fields": [dict(f) for f in b["fields"]], "config_key": b.get("config_key")})
+            r.pop("config")                              # unbuilt-only: raw config keys, no schema
+            r.update(label=b["label"], category=b.get("category") or r["category"],
+                     icon=b.get("icon") or wid, built=True, beta=bool(b.get("beta")),
+                     desc=b.get("desc") or r["desc"], fields=[dict(f) for f in b["fields"]],
+                     config_key=b.get("config_key"))
+        return r
+
+    out, seen = [], set()
+    for w in allw:                                       # first entry wins on a duplicate id
+        wid = w.get("id")
+        if wid and wid not in seen:
+            seen.add(wid)
+            out.append(row(wid, w))
+    out += [row(wid, {}) for wid in built if wid not in seen]   # built types the cache misses (e.g. seerr)
     return out
 
 
@@ -149,9 +145,17 @@ if __name__ == "__main__":   # ponytail: catalog integrity + JSON-safety, offlin
         assert fetch(t["id"], {}) == {}, f"{t['id']} not graceful on empty config"   # no url -> {}
     assert secret_fields("proxmox") == ["token"]
     assert field_names("unifi")[0] == "url"
-    _json.dumps(catalog_public())            # must be serialisable (no callables)
     assert fetch("nope", {}) == {}
     fc = full_catalog()                      # merged store: all cached + our built ones
     assert len(fc) >= len(CATALOG) and sum(1 for w in fc if w["built"]) == len(CATALOG)
+    # the two store shapes: installable (field schema) vs reference-only (raw config keys)
+    built_w = next(w for w in fc if w["built"])
+    unbuilt = next(w for w in fc if not w["built"])
+    assert set(built_w) == {"id", "label", "category", "icon", "built", "beta", "desc",
+                            "shows", "doc", "fields", "config_key"}, sorted(built_w)
+    assert set(unbuilt) == {"id", "label", "category", "icon", "built", "desc",
+                            "shows", "doc", "config"}, sorted(unbuilt)
+    assert all(w["category"] and w["label"] for w in fc)          # no blank rows in the store
+    assert len({w["id"] for w in fc}) == len(fc), "duplicate id in the merged store"
     _json.dumps(fc)                          # JSON-safe (no fetch callables leaked)
     print(f"widgets/registry self-check ok ({len(CATALOG)} built / {len(fc)} in store)")

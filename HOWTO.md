@@ -51,11 +51,16 @@ sets up a systemd service, so it starts on boot and restarts if it dies.
 
 **Update:** `./update.sh` (or re-run the one-liner).  **Remove:** `./uninstall.sh`.
 
-> Prefer to keep the dashboard on **Windows**? Git-free install/update in one line
-> (PowerShell): `irm https://raw.githubusercontent.com/FugginOld/topographer/main/update.ps1 | iex`
-> — it fetches the operational files and starts the dashboard via `server.ps1` (opens
-> the firewall + runs the server). Set `$env:TOPO_PORT` / `$env:TOPO_TOKEN` first if
-> needed; make it persistent via Task Scheduler like the agent in **Part D**.
+> **Docker / Unraid Community Applications:** search **topographer** in CA and hit
+> Install — appdata (`/app/out`) is the only setting that matters. Elsewhere:
+> `docker compose up -d` (see [docker-compose.yml](docker-compose.yml)). Keep
+> **host networking**: the ping/arp/nmap collectors need to see the real LAN, and
+> agent pushes keep their true source IP (each card is labelled by it). `config.yaml`
+> and an SSH key folder are optional mounts for the network scan / remote scan.
+
+> Prefer to keep the dashboard on **Windows**? Run the container (Docker Desktop),
+> or `python renderers/html/topo_server.py` directly and open port 8770 in the
+> firewall yourself. Windows machines *reporting* to a dashboard are Part C.
 
 ---
 
@@ -199,7 +204,7 @@ then:
 ```bash
 sudo systemctl daemon-reload && sudo systemctl restart topo-server
 ```
-(Windows: `$env:TOPO_TOKEN = "pick-a-long-secret"` before `.\server\server.ps1`.)
+(Container: set `TOPO_TOKEN` in the compose file / Unraid template instead.)
 
 **On each reporting machine**, provide the same token:
 ```bash
@@ -280,7 +285,7 @@ baked into old systemd units / launchers changed.
 |---|---|
 | `install.sh` / `uninstall.sh` | set up / remove the dashboard server as a Linux service |
 | `systemd/topo-server.service` | the dashboard service unit (install.sh writes it for you) |
-| `server/server.ps1` | start the dashboard on Windows (firewall + topo_server.py) |
+| `Dockerfile` / `docker-compose.yml` / `docker/topographer.xml` | run the dashboard as a container (incl. Unraid CA) |
 | `renderers/html/topo_server.py` | dashboard server + ingest/telemetry API |
 | `renderers/html/index.html` | the dashboard UI |
 | `scanners/make_pc_topo.py` | Windows hardware scan |

@@ -681,6 +681,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        p = self.path.split("?")[0]          # route on the path; handlers read the query
         # agent client + its installer, served from this server (not github) so a
         # fresh machine bootstraps entirely from the dashboard it reports to.
         if self.path == "/agent.tar.gz":
@@ -695,35 +696,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self._send_bytes("text/plain; charset=utf-8", fh.read())
             except OSError:
                 return self._send(404, {"error": "not found"})
-        if self.path.split("?")[0] == "/api/list":
+        if p == "/api/list":
             return self._send(200, list_rows())
-        if self.path.split("?")[0] == "/api/telemetry":
+        if p == "/api/telemetry":
             host = parse_qs(urlparse(self.path).query).get("host", [""])[0]
             try:
                 return self._send(200, host_telemetry(host) if host else telemetry_local())
             except Exception as e:
                 return self._send(200, {**_tele.ZERO, "error": str(e)})
-        if self.path.split("?")[0] == "/api/gwdash":
+        if p == "/api/gwdash":
             return self._send(200, gateway_dashboard())
-        if self.path.split("?")[0] == "/api/services":
+        if p == "/api/services":
             host = parse_qs(urlparse(self.path).query).get("host", [""])[0]
             return self._send(200, host_services(host))
-        if self.path.split("?")[0] == "/icon":
+        if p == "/icon":
             q = parse_qs(urlparse(self.path).query)
             ic = icons.icon_bytes(q.get("name", [""])[0], q.get("image", [""])[0])
             return self._send_bytes(*ic) if ic else self._send(404, {"error": "no icon"})
-        if self.path.split("?")[0] == "/api/glances":
+        if p == "/api/glances":
             host = parse_qs(urlparse(self.path).query).get("host", [""])[0]
             try:
                 return self._send(200, glances_stats(host))
             except Exception as e:
                 return self._send(200, {"error": str(e)})
-        if self.path.split("?")[0] == "/api/widget-catalog":
+        if p == "/api/widget-catalog":
             return self._send(200, wreg.full_catalog())
-        if self.path.split("?")[0] == "/api/widgets":
+        if p == "/api/widgets":
             host = store.stable_slug(parse_qs(urlparse(self.path).query).get("host", [""])[0])
             return self._send(200, widgets_list(host))
-        if self.path.split("?")[0] == "/api/export":
+        if p == "/api/export":
             q = parse_qs(urlparse(self.path).query)
             tid = q.get("id", [""])[0]
             obj = export_bundle(tid) if tid else export_all()   # store.load is path-guarded
@@ -732,7 +733,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send_download(f"{stem}.html", export_html(obj), "text/html; charset=utf-8")
             return self._send_download(f"{stem}.json", obj)
         if self.path.startswith("/t/"):
-            tid = os.path.basename(self.path.split("?")[0])[:-5]  # strip .json
+            tid = os.path.basename(p)[:-5]  # strip .json
             try:
                 return self._send(200, store.load(tid))
             except (ValueError, OSError):

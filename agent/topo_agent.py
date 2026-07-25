@@ -106,7 +106,8 @@ def report(server: str, name: str, token: str, interval: float, topo_every: floa
         detail = e.read().decode(errors="replace")[:200]
         if e.code == 404:
             sys.exit(f"server returned 404 for /api/ingest — {server} is running an OLD topo_server.py.\n"
-                     f"On the server: stop it, `git pull`, and restart (.\\server.ps1 or python renderers/html/topo_server.py).")
+                     f"On the server: stop it, `git pull`, and restart it "
+                     f"(python renderers/html/topo_server.py, or `docker restart` the container).")
         sys.exit(f"server rejected the push: HTTP {e.code} {detail}")
     except (urllib.error.URLError, OSError) as e:
         sys.exit(f"could not reach {server}: {e}  (is topo_server.py running? firewall open on 8770?)")

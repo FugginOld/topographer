@@ -39,7 +39,8 @@ does the HTTP + field extraction. No Python function, no UI, no per-widget test.
 Homepage's source — `src/widgets/<id>/widget.js` (its `api` template shows the
 auth: `?apikey={key}` → `apikey-query`; a `credentialedProxyHandler` → a header).
 The `path`s are the JSON keys in that endpoint's response — check the service's
-own API, or `docs/references/homepage-widgets-full.md` for the config + fields.
+own API, or Homepage's per-widget docs for the config + fields:
+https://github.com/gethomepage/homepage/tree/main/docs/widgets/services
 
 **`show` field ops** (in `engine.py`):
 
