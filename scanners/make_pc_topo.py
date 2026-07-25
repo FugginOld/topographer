@@ -105,18 +105,33 @@ def is_hub(name: str, cls: str = "") -> bool:
                                   "upstream", "downstream", " dmi"))
 
 
+def perf_iface(desc: str) -> str:
+    r"""A NIC's adapter description -> the Windows perf-counter instance name that
+    core/local_telemetry keys `nics` by (the '\Network Interface(*)' counter).
+    Without this the dashboard fuzzy-matches labels; with it telemetry maps by
+    iface, the way it already does on Linux.
+
+    Verified against a 6-NIC machine: lowercased, with () -> [] and # -> _
+    ("Intel(R) ... X710 #2" -> "intel[r] ... x710 _2").
+    """
+    out = desc.lower()
+    for a, b in (("(", "["), (")", "]"), ("#", "_"), ("/", "_"), ("\\", "_")):
+        out = out.replace(a, b)
+    return out
+
+
 def classify(name: str, cls: str) -> dict:
     low = name.lower()
     if cls == "Net":
         if "x710" in low or "10g" in low or "sfp" in low:
-            return {"cls": "gen4", "cap": 20, "grp": "net"}
+            return {"cls": "gen4", "cap": 10, "grp": "net"}   # Gb/s, as make_linux_topo stores
         if "i226" in low or "i225" in low or "2.5g" in low:
             return {"cls": "gen3", "cap": 2.5, "grp": "net"}
         if any(s in low for s in ("wi-fi", "wifi", "wireless", "rz6", "ax2", "be2")):
             return {"cls": "gen3", "cap": 2.4, "grp": "net"}
         return {"cls": "gen3", "cap": 1, "grp": "net"}
     if cls == "Display":
-        return {"cls": "gen4", "cap": 4, "grp": "gpu"}
+        return {"cls": "gen4", "cap": 8, "grp": "gpu"}       # matches pci_cat() base 03
     if cls in ("SCSIAdapter", "HDC") or "nvm express" in low:
         return {"cls": "gen4", "cap": 0, "grp": None}   # controller structural; disk carries load
     if cls == "DiskDrive":
@@ -173,6 +188,7 @@ def probe() -> list[str]:
 def build(lines: list[str]) -> list[dict]:
     cpu_name, cores, threads = "CPU", "", ""
     link, size, fill, rams, mons, pmap = {}, {}, {}, [], [], {}
+    link_desc: dict[str, str] = {}   # cleaned label -> raw adapter description
     meta = {}   # iid -> (class, name)
     prop = {}   # iid -> {loc, cw, cs}
     for ln in lines:
@@ -181,6 +197,7 @@ def build(lines: list[str]) -> list[dict]:
             cpu_name, cores, threads = short_cpu(p[1]), p[2], p[3]
         elif p[0] == "LINK":
             link[clean(p[1])] = (p[2].strip().lower() == "connected")
+            link_desc[clean(p[1])] = p[1]      # raw: perf counters keep the "(R)" clean() strips
         elif p[0] == "SIZE":
             size[clean(p[1])] = f"{p[2]} · {p[3]}"
         elif p[0] == "FILL" and len(p) >= 5:
@@ -251,6 +268,7 @@ def build(lines: list[str]) -> list[dict]:
             if blabel:
                 node["link"] = blabel
             if c["grp"] == "net":
+                node["iface"] = perf_iface(link_desc.get(label, label))   # telemetry maps bytes/sec by this
                 up = link.get(label)
                 if up is not None:
                     node["up"] = up
@@ -350,5 +368,36 @@ def main() -> None:
     print(f"wrote {args.out}  ({len(nodes)} modules)")
 
 
+
+
+def _selftest() -> None:      # ponytail: pure helpers + the cap vocabulary shared with Linux
+    # the perf-counter names measured on a real 6-NIC machine
+    assert perf_iface("Intel(R) Ethernet Controller I226-V") == "intel[r] ethernet controller i226-v"
+    assert perf_iface("Intel(R) Ethernet Converged Network Adapter X710 #2") ==         "intel[r] ethernet converged network adapter x710 _2"
+    assert perf_iface("RZ616 Wi-Fi 6E 160MHz") == "rz616 wi-fi 6e 160mhz"
+    assert perf_iface("ASIX USB to Gigabit Ethernet Family Adapter") ==         "asix usb to gigabit ethernet family adapter"
+    # perf_iface takes the RAW description: clean() strips "(R)", but the counter
+    # keeps it as "[r]", so feeding the cleaned label matches nothing (4 of 6 NICs
+    # on a real machine). Regression guard for exactly that.
+    assert perf_iface(clean("Intel(R) Ethernet Controller I226-V")) !=         perf_iface("Intel(R) Ethernet Controller I226-V")
+
+    # cap/grp vocabulary must agree with make_linux_topo.pci_cat for the same device
+    assert classify("NVIDIA GeForce RTX 4090", "Display") == {"cls": "gen4", "cap": 8, "grp": "gpu"}
+    assert classify("Intel(R) X710 10G SFP+", "Net")["cap"] == 10          # Gb/s, not 20
+    assert classify("Intel(R) I226-V 2.5G", "Net")["cap"] == 2.5
+    assert classify("Intel Wi-Fi 6E AX211", "Net")["cap"] == 2.4
+    assert classify("Realtek Gaming GbE", "Net")["cap"] == 1
+    assert classify("Standard NVM Express Controller", "SCSIAdapter")["grp"] is None
+    assert classify("USB4 Host Router", "USB")["cap"] == 40
+
+    assert is_hub("Intel PCI Express Root Port #5", "") and not is_hub("Intel I226-V", "Net")
+    assert pcie(4, 4) == ("x4 G4", "gen4") or pcie(4, 4)[0].startswith("x4")
+    print("make_pc_topo self-check ok")
+
+
 if __name__ == "__main__":
-    main()
+    import sys as _sys
+    if "--selftest" in _sys.argv:
+        _selftest()
+    else:
+        main()

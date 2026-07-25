@@ -62,6 +62,7 @@ python -m widgets.fetchers                       # widget stat parsers + collect
 python -m widgets.policy                         # widget config/secret policy (mask/whitelist/inherit)
 python -m widgets.registry                       # catalog integrity + full_catalog merge
 python scanners/make_linux_topo.py --selftest
+python scanners/make_pc_topo.py --selftest       # perf-counter iface + cap vocabulary
 bash tests/test_uninstall_unraid.sh              # uninstaller only removes its own boot 'go' lines
 ```
 
