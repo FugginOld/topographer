@@ -51,11 +51,12 @@ python -m widgets.engine                         # widget engine (auth/mapping)
 python -m widgets.fetchers                       # widget stat parsers (prowlarr/sabnzbd/tautulli)
 python -m widgets.registry                       # catalog integrity + full_catalog merge
 python scanners/make_linux_topo.py --selftest
+bash tests/test_uninstall_unraid.sh              # uninstaller only removes its own boot 'go' lines
 ```
 
 (`widgets/*` use relative imports — run via `python -m widgets.<mod>`, like `collectors/`.)
-Also in CI: `bash -n *.sh`; `.ps1` files must be ASCII; dashboard JS via `node --check` on the
-extracted `<script>` block.
+Also in CI: `bash -n *.sh tests/*.sh`; `.ps1` files must be ASCII; dashboard JS via `node --check`
+on the extracted `<script>` block.
 
 Non-trivial logic leaves one runnable check behind — an `assert`-based `__main__` self-check in the
 module itself, or a small `tests/test_*.py`. No frameworks, no fixtures beyond `tests/fixtures/`.
@@ -82,9 +83,11 @@ These are not style preferences. Each one has broken something real.
    strings — device labels are untrusted. Keep it that way.
 7. **Restarting the server depends on how it was started.** `systemctl restart topo-server` only
    applies on a systemd Linux box. The production dashboard runs on **Unraid** (Slackware, no
-   systemd): restart the container (`docker restart <name>`), or kill the process
-   (`ps aux | grep '[t]opo_server'` → `kill <pid>`) and relaunch it the way it starts there (User
-   Scripts entry / flash launcher). There is no `systemctl` on an Unraid host.
+   systemd), as a container: `docker restart topographer`. There is no `systemctl` on an Unraid
+   host — never tell a user to run it there. The older native Unraid install (flash launcher + a
+   boot `go` hook) is retired: `install.sh` refuses on Unraid and points at the container, while
+   `uninstall.sh` still removes it so existing installs can migrate. Agents on Unraid are
+   unaffected — `bootstrap.sh` still uses the `go` script for `topo-agent`.
 8. **Reporting clients are NOT git checkouts.** A reporting host (e.g. a Pi agent) runs the *agent
    bundle* the dashboard serves — `bootstrap.sh` fetches `/agent.tar.gz` and extracts it (no `.git`),
    so `git pull` fails there. To ship agent-side code to a client: update + restart the dashboard

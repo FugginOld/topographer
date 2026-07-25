@@ -67,10 +67,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Bash syntax
-        run: for f in *.sh; do echo "checking $f"; bash -n "$f"; done
+        run: for f in *.sh tests/*.sh; do echo "checking $f"; bash -n "$f"; done
       - name: ShellCheck (advisory)
         continue-on-error: true
         run: shellcheck *.sh
+      - name: Uninstaller leaves the Unraid boot 'go' script intact
+        run: bash tests/test_uninstall_unraid.sh
       - name: Dashboard JS syntax
         run: |
           python3 - <<'PY'

@@ -15,12 +15,17 @@ set -euo pipefail
 REPO="${TOPO_REPO:-https://github.com/FugginOld/topographer}"
 TARURL="${REPO%.git}/archive/refs/heads/main.tar.gz"
 
-# Unraid runs its OS from RAM, so $HOME is wiped on reboot — fetch to the array
-# (appdata) instead. install.sh persists via the boot 'go' script (no systemd).
-if [ -f /etc/unraid-version ] && [ -z "${TOPO_DIR:-}" ]; then
-  [ -d /mnt/user ] && DIR=/mnt/user/appdata/topographer || DIR=/boot/config/topographer
+# Unraid updates by pulling the image, not by fetching source — bail before the
+# download rather than after (install.sh would refuse anyway).
+if [ -f /etc/unraid-version ]; then
+  echo "Unraid detected — update the container instead:"
+  echo "  docker pull ghcr.io/fugginold/topographer:latest && docker restart topographer"
+  echo "  (Community Applications does this for you.)"
+  echo
+  echo "Still on the older native install? ./uninstall.sh removes it, data untouched."
+  exit 1
 fi
-DIR="${TOPO_DIR:-${DIR:-$HOME/topographer}}"
+DIR="${TOPO_DIR:-$HOME/topographer}"
 
 # Extract only the files needed to RUN the server + serve the client — skip the
 # dev-only tree (tests, CI). out/ and config.yaml are gitignored so they're not
