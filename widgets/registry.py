@@ -76,6 +76,25 @@ CATALOG += [engine.entry(d) for d in definitions.DEFS]
 
 _BY_ID = {t["id"]: t for t in CATALOG}
 
+_catalog_cache: dict = {"mtime": None, "rows": []}
+
+
+def _cached_catalog() -> list:
+    """catalog.json's rows, re-read only when the file changes. It is ~47 KB and
+    was parsed afresh on every /api/widget-catalog request."""
+    try:
+        mtime = os.path.getmtime(_CATALOG_JSON)
+    except OSError:
+        return []
+    if _catalog_cache["mtime"] != mtime:
+        try:
+            with open(_CATALOG_JSON, encoding="utf-8") as fh:
+                _catalog_cache["rows"] = (json.load(fh) or {}).get("widgets") or []
+        except Exception:
+            _catalog_cache["rows"] = []
+        _catalog_cache["mtime"] = mtime
+    return _catalog_cache["rows"]
+
 
 def get(type_id: str) -> dict | None:
     return _BY_ID.get(type_id)
@@ -93,10 +112,7 @@ def full_catalog() -> list[dict]:
     """The whole browsable store: every Homepage widget from catalog.json, merged
     with our built ones. Built types carry their real field schema (installable);
     unbuilt types are listed for reference (built=False, no fetcher, can't install)."""
-    try:
-        allw = (json.load(open(_CATALOG_JSON, encoding="utf-8")) or {}).get("widgets") or []
-    except Exception:
-        allw = []
+    allw = _cached_catalog()
     built = {t["id"]: t for t in CATALOG}
 
     def row(wid: str, w: dict) -> dict:
@@ -147,6 +163,7 @@ if __name__ == "__main__":   # ponytail: catalog integrity + JSON-safety, offlin
     assert field_names("unifi")[0] == "url"
     assert fetch("nope", {}) == {}
     fc = full_catalog()                      # merged store: all cached + our built ones
+    assert full_catalog() == fc, "cached catalog must not drift between calls"
     assert len(fc) >= len(CATALOG) and sum(1 for w in fc if w["built"]) == len(CATALOG)
     # the two store shapes: installable (field schema) vs reference-only (raw config keys)
     built_w = next(w for w in fc if w["built"])

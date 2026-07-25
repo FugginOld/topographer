@@ -98,16 +98,29 @@ def list_rows() -> list[dict]:
 GENERATOR = "scanners/make_pc_topo.py" if sys.platform.startswith("win") else "scanners/make_linux_topo.py"
 
 
+_cfg_cache: dict = {"mtime": None, "data": {}}
+
+
 def _cfg_block(key: str) -> dict:
-    """A top-level block from config.yaml, or {} if absent/unparseable."""
+    """A top-level block from config.yaml, or {} if absent/unparseable.
+
+    Re-parsed only when the file changes on disk. It used to be read and parsed on
+    every request that touched a collector block — including every widget fetch —
+    while still honouring a live edit, which the mtime check preserves."""
     path = os.path.join(ROOT, "config.yaml")
-    if not os.path.exists(path):
-        return {}
     try:
-        import yaml
-        return (yaml.safe_load(open(path, encoding="utf-8")) or {}).get(key) or {}
-    except Exception:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        _cfg_cache.update(mtime=None, data={})
         return {}
+    if _cfg_cache["mtime"] != mtime:
+        try:
+            import yaml
+            _cfg_cache["data"] = yaml.safe_load(open(path, encoding="utf-8")) or {}
+        except Exception:
+            _cfg_cache["data"] = {}
+        _cfg_cache["mtime"] = mtime
+    return _cfg_cache["data"].get(key) or {}
 
 
 def _remote_scan_cfg() -> dict:
@@ -202,7 +215,25 @@ def host_services(host_id: str) -> dict:
 # remote host serves whatever its reporting agent last pushed — push model, like
 # telemetry/services, so remote Linux hosts light up with no per-host config.
 #   glances: {enabled: true, url: "http://localhost:61208", version: 4}
-_glances_cache = {"t": 0.0, "data": {}}   # this server's OWN glances proxy (brief cache), not a push
+# One compute-if-stale memo. This was the same four lines three times (own
+# telemetry, own glances proxy, per-widget stats) — distinct from PushCache, which
+# keeps a pushed sample and tags it live/stale rather than recomputing it.
+_memo: dict[str, dict] = {}
+
+
+def _fresh(key: str, ttl: float, compute):
+    c = _memo.get(key)
+    if c and time.monotonic() - c["t"] < ttl:
+        return c["data"]
+    data = compute()
+    _memo[key] = {"t": time.monotonic(), "data": data}
+    return data
+
+
+def _invalidate(key: str) -> None:
+    _memo.pop(key, None)
+
+
 _pushed_gl = PushCache(15.0, store.stable_slug)   # remote hosts' pushed glances metrics
 
 
@@ -212,11 +243,9 @@ def glances_stats(host_id: str) -> dict:
     cfg = _cfg_block("glances")                          # this machine: proxy its local Glances
     if not cfg.get("enabled"):
         return {}
-    if time.monotonic() - _glances_cache["t"] < 2.0:
-        return _glances_cache["data"]
-    data = glances.fetch(cfg.get("url") or glances.DEFAULT_URL, cfg.get("version", 4))
-    _glances_cache.update(t=time.monotonic(), data=data)
-    return data
+    return _fresh("glances", 2.0,
+                  lambda: glances.fetch(cfg.get("url") or glances.DEFAULT_URL,
+                                        cfg.get("version", 4)))
 
 
 def scan_host(host: str, name: str) -> dict:
@@ -319,21 +348,17 @@ def generate_network(subnet: str | None = None) -> dict:
 sys.path.insert(0, ROOT)    # repo root — where core/ and the scanners live
 from core import local_telemetry as _tele   # noqa: E402  shared local-metrics sampler
 from core import glances                     # noqa: E402  Glances reader (also used by the agent)
+from renderers import card                  # noqa: E402  Card contract for untrusted ingest
 from widgets import policy as wpolicy       # noqa: E402  widget config/secret policy
 from widgets import registry as wreg         # noqa: E402  widget Type catalog + fetchers
 
-_tele_cache = {"t": 0.0, "data": dict(_tele.ZERO)}   # this server's OWN metrics (brief cache), not a push
 _pushed_tele = PushCache(15.0, store.stable_slug)    # remote hosts' pushed telemetry
 _pushed_svc = PushCache(900.0, store.stable_slug)    # remote hosts' pushed services (push slowly, ~5 min)
 
 
 def telemetry_local() -> dict:
     """This (server) machine's live metrics, cached briefly."""
-    if time.monotonic() - _tele_cache["t"] < 1.5:
-        return _tele_cache["data"]
-    data = _tele.sample()
-    _tele_cache.update(t=time.monotonic(), data=data)
-    return data
+    return _fresh("tele", 1.5, _tele.sample)
 
 
 def _is_remote(tid: str) -> bool:
@@ -459,7 +484,6 @@ def export_all() -> dict:
 # ── Widget Store: per-host service widgets. Config (incl. secrets) lives in
 # widget_store (gitignored out/); the server does every outbound API call and
 # masks secret fields on the way out, so keys never reach the browser. ──────────
-_widget_cache: dict[str, dict] = {}   # "host|id" -> {"t": monotonic, "data": stats}
 WIDGET_FRESH = 20.0                   # seconds a fetched sample is reused
 
 
@@ -479,13 +503,10 @@ def widgets_list(host: str) -> list[dict]:
         return []
     out = []
     for w in widget_store.list_for(host):
-        key = f"{host}|{w['id']}"
         ttl = w.get("interval") or WIDGET_FRESH             # per-widget refresh, else global
-        c = _widget_cache.get(key)
-        if not (c and time.monotonic() - c["t"] < ttl):
-            c = {"t": time.monotonic(), "data": wreg.fetch(w.get("type", ""), _effective_config(w))}
-            _widget_cache[key] = c
-        out.append({**wpolicy.public(w), "data": c["data"]})
+        data = _fresh(f"widget|{host}|{w['id']}", ttl,
+                      lambda w=w: wreg.fetch(w.get("type", ""), _effective_config(w)))
+        out.append({**wpolicy.public(w), "data": data})
     return out
 
 
@@ -637,6 +658,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 topo = self._body()
                 if not isinstance(topo, dict) or not topo.get("nodes"):
                     return self._send(400, {"error": "body must be a topology with a 'nodes' array"})
+                # the one place foreign cards enter: project them onto the Card
+                # contract rather than storing whatever an agent happened to send
+                topo["nodes"] = card.project(topo["nodes"])
+                if not topo["nodes"]:
+                    return self._send(400, {"error": "no usable cards (each needs id + label)"})
                 return self._send(200, store.save(topo, self.client_address[0]))
             if self.path == "/api/telemetry":
                 if INGEST_TOKEN and self.headers.get("X-Token") != INGEST_TOKEN:
@@ -681,7 +707,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not cur:
                     return self._send(404, {"error": "no such widget"})
                 cfg = wpolicy.clean(cur["type"], b.get("config", {}), cur.get("config"))
-                _widget_cache.pop(f"{host}|{wid}", None)          # re-fetch with the new config
+                _invalidate(f"widget|{host}|{wid}")               # re-fetch with the new config
                 return self._send(200, wpolicy.public(widget_store.update(host, wid, cfg, b.get("interval"))))
             if self.path == "/api/widget-test":
                 b = self._body()
@@ -689,14 +715,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 w = next((x for x in widget_store.list_for(host) if x["id"] == wid), None)
                 if not w:
                     return self._send(404, {"error": "no such widget"})
-                data = wreg.fetch(w.get("type", ""), _effective_config(w))   # fresh, bypass cache
-                _widget_cache[f"{host}|{wid}"] = {"t": time.monotonic(), "data": data}
+                _invalidate(f"widget|{host}|{wid}")                           # force a fresh fetch
+                data = _fresh(f"widget|{host}|{wid}", WIDGET_FRESH,
+                              lambda: wreg.fetch(w.get("type", ""), _effective_config(w)))
                 return self._send(200, {"ok": bool(data), "empty": not data, "data": data})
             if self.path == "/api/widget-delete":
                 b = self._body()
                 host, wid = store.stable_slug(b.get("host", "")), b.get("id", "")
                 widget_store.delete(host, wid)
-                _widget_cache.pop(f"{host}|{wid}", None)
+                _invalidate(f"widget|{host}|{wid}")
                 return self._send(200, {"ok": True})
             if self.path == "/api/widget-reorder":
                 b = self._body()

@@ -95,6 +95,7 @@ def test_routes():
         cd = hdrs.get("Content-Disposition", "")
         assert cd.startswith('attachment; filename="dashboard-') and cd.endswith('.json"'), cd
         assert "\r" not in cd and "\n" not in cd
+        _ingest_projection(port)
         _snapshot_round_trip(port)
     finally:
         proc.terminate()
@@ -110,6 +111,31 @@ def _post(port: int, path: str, obj):
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read() or b"{}")
+
+
+def _ingest_projection(port: int):
+    """/api/ingest is the one place foreign cards enter — every remote agent and
+    every SSH-scanned host. They must arrive as Cards, not as whatever was sent."""
+    name = "selftest ingest marker"
+    tid = None
+    try:
+        st, res = _post(port, "/api/ingest", {
+            "name": name,
+            "nodes": [
+                {"id": "n0", "label": "cpu", "cap": 0, "up": False,      # falsy-but-real: kept
+                 "bogus": "not a card field", "__proto__": "x"},
+                {"label": "no id at all"},                               # unusable: dropped
+                "not even a dict",
+            ]})
+        assert st == 200, (st, res)
+        tid = res["id"]
+        nodes = json.loads(_get(port, f"/t/{tid}.json")[1])["nodes"]
+        assert len(nodes) == 1, nodes
+        assert nodes[0]["cap"] == 0 and nodes[0]["up"] is False, nodes  # falsy values survive
+        assert "bogus" not in nodes[0] and "__proto__" not in nodes[0], nodes
+    finally:
+        if tid:
+            _post(port, "/api/delete", {"id": tid})
 
 
 def _snapshot_round_trip(port: int):

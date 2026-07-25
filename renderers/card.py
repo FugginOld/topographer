@@ -37,10 +37,44 @@ class Card:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
+def project(nodes) -> list[dict]:
+    """Foreign node dicts -> Cards, keeping only declared fields.
+
+    The seam for untrusted input: `/api/ingest` takes cards from every remote agent
+    and every SSH-scanned host, and the third writer (`make_linux_topo.py`) can't
+    import this module, so its output is only a Card by convention. Projecting on
+    arrival makes the contract hold for all three writers without any of them
+    changing — the same move `_tele.ZERO` already makes for pushed telemetry.
+
+    A node without `id` and `label` can't be drawn, so it is dropped.
+    """
+    out = []
+    for n in nodes or []:
+        if not isinstance(n, dict):
+            continue
+        known = {k: v for k, v in n.items() if k in Card.__dataclass_fields__ and v is not None}
+        if not known.get("id") or not known.get("label"):
+            continue
+        out.append(known)
+    return out
+
+
 if __name__ == "__main__":  # ponytail: contract self-check
     assert Card(id="n0", label="cpu").to_dict() == {"id": "n0", "label": "cpu"}, "drops unset"
     c = Card(id="p1", label="eth0", parent="root", cls="gen4", grp="net",
              up=False, cap=0, fill=0.0).to_dict()
     assert c == {"id": "p1", "label": "eth0", "parent": "root", "cls": "gen4",
                  "grp": "net", "up": False, "cap": 0, "fill": 0.0}, c   # keeps falsy-but-real
+    # project(): the untrusted-input seam
+    p = project([{"id": "n0", "label": "cpu", "cap": 0, "up": False, "fill": 0.0,
+                  "bogus": "x", "__proto__": "y"},
+                 {"label": "no id"}, {"id": "no label"}, "not a dict", None])
+    assert len(p) == 1, p
+    assert p[0] == {"id": "n0", "label": "cpu", "cap": 0, "up": False, "fill": 0.0}, p
+    assert project([]) == [] and project(None) == []
+    # every field a scanner really emits survives the projection
+    full = {"id": "p1", "label": "eth0", "parent": "root", "sub": "1GbE", "cls": "gen4",
+            "kind": "leaf", "meta": {"a": 1}, "grp": "net", "cap": 1.0, "up": True,
+            "fill": 0.5, "link": "x4 G4", "iface": "eth0"}
+    assert project([full])[0] == full, project([full])
     print("card contract self-check ok")
