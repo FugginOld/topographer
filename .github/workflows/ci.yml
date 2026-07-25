@@ -42,6 +42,9 @@ jobs:
           python -m collectors.unifi_snmp
           python -m collectors.docker
           python -m collectors.tailscale
+          python -m collectors.dns
+          python -m collectors.pingsweep
+          python -m collectors.opnsense
       # module self-checks — each module's __main__ asserts its own contract, offline.
       # Keep this list identical to CONTRIBUTING.md → Tests.
       - name: Path-injection barrier (shared by both stores)

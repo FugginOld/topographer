@@ -47,6 +47,17 @@ def _local_ipv4() -> str | None:
         s.close()
 
 
+def parse_arp(text: str) -> dict[str, str]:
+    """`arp -a` output (Windows and POSIX layouts differ) -> {ip: normalized MAC}.
+    Only lines carrying both an IP and a MAC count."""
+    table: dict[str, str] = {}
+    for line in (text or "").splitlines():
+        ipm, macm = _IP_RE.search(line), _MAC_RE.search(line)
+        if ipm and macm:
+            table[ipm.group(1)] = macm.group(1).replace("-", ":").lower()
+    return table
+
+
 class PingSweepCollector(Collector):
     name = "pingsweep"
 
@@ -127,12 +138,7 @@ class PingSweepCollector(Collector):
         except (subprocess.TimeoutExpired, OSError) as e:
             log.warning("pingsweep: arp -a failed: %s", e)
             return {}
-        table: dict[str, str] = {}
-        for line in out.splitlines():
-            ipm, macm = _IP_RE.search(line), _MAC_RE.search(line)
-            if ipm and macm:
-                table[ipm.group(1)] = macm.group(1).replace("-", ":").lower()
-        return table
+        return parse_arp(out)
 
 
 if __name__ == "__main__":  # ponytail: self-check, no framework

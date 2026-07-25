@@ -44,6 +44,9 @@ python -m collectors.arpscan                     # arp-scan + nmap output parser
 python -m collectors.unifi_snmp                  # snmpwalk parser + FDB OID -> MAC decode
 python -m collectors.docker                      # docker ps line parser
 python -m collectors.tailscale                   # peer shaping + overlay mesh
+python -m collectors.dns                         # hosts file + pi-hole custom dns rows
+python -m collectors.pingsweep                   # arp -a table parser (win + posix)
+python -m collectors.opnsense                    # vlan zones + lease/arp merge
 python renderers/html/_guard.py                  # shared path-injection barrier
 python renderers/html/pushcache.py               # push-freshness cache (live/stale/miss)
 python renderers/html/store.py                   # store slug policy + save/load
