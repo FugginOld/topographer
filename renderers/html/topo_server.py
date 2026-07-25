@@ -509,9 +509,12 @@ def snapshot_restore(snap) -> dict:
     and absent from the file is left alone (restore never deletes). Restoring a
     server's own snapshot is therefore a no-op.
 
-    Ids from the file are honoured but every one of them goes through the store's
-    path guard, so a crafted id raises and is skipped rather than escaping the
-    store. An entry whose id is unusable still restores under a slug of its name."""
+    An id from the file is only used when it is already *canonical* — equal to its
+    own stable_slug. Every id the store generates is a fixed point of that function,
+    so real snapshots restore byte-identically, while anything else (a traversal
+    attempt, a hand-edited key) is refused rather than quietly reshaped into a new
+    entry. Only slug output reaches the filesystem; the store's path guard still
+    backs it up."""
     if not isinstance(snap, dict) or snap.get("kind") != SNAPSHOT_KIND:
         raise ValueError("not a topographer snapshot (wrong or missing 'kind')")
     topos = skipped = 0
@@ -521,23 +524,24 @@ def snapshot_restore(snap) -> dict:
         doc = entry.get("topology")
         if not isinstance(doc, dict) or not doc.get("nodes"):
             continue
-        try:
-            store.save_as(str(entry.get("id") or ""), doc)   # guarded; keeps the original id
-        except (ValueError, OSError):
-            if not doc.get("name"):
-                skipped += 1
-                continue
-            store.save(doc)                            # unusable id -> slug of the name
+        raw = str(entry.get("id") or "")
+        canon = store.stable_slug(raw)
+        if raw and raw == canon:
+            store.save_as(canon, doc)                  # canonical id kept as-is
+        elif doc.get("name"):
+            store.save(doc)                            # no usable id -> slug of the name
+        else:
+            skipped += 1
+            continue
         topos += 1
     hosts = widgets = 0
     for host, ws in (snap.get("widgets") or {}).items():
-        if not isinstance(ws, list) or not str(host).strip():
+        raw = str(host)
+        canon = store.stable_slug(raw)
+        if not isinstance(ws, list) or not raw.strip() or raw != canon:
+            skipped += 1                               # widget keys are always slugs already
             continue
-        try:
-            widgets += widget_store.replace(str(host), ws)   # guarded the same way
-        except (ValueError, OSError):
-            skipped += 1
-            continue
+        widgets += widget_store.replace(canon, ws)
         hosts += 1
     return {"topologies": topos, "hosts": hosts, "widgets": widgets, "skipped": skipped}
 
