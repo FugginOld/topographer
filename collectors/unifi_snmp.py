@@ -34,6 +34,30 @@ DOT1D_FDB = "1.3.6.1.2.1.17.4.3.1.2"              # dot1dTpFdbPort (mac -> bridg
 IF_NAME = "1.3.6.1.2.1.31.1.1.1.1"               # ifName
 
 
+def parse_walk(text: str) -> list[tuple[str, str]]:
+    """snmpwalk -On output -> (oid, value) pairs. Drops the type prefix
+    ("STRING: eth0") and surrounding quotes; ignores anything without " = "."""
+    pairs = []
+    for line in (text or "").splitlines():
+        if " = " not in line:
+            continue
+        k, v = line.split(" = ", 1)
+        pairs.append((k.strip(), v.split(":", 1)[-1].strip().strip('"')))
+    return pairs
+
+
+def mac_from_fdb_oid(oid: str, base: str) -> str | None:
+    """A BRIDGE-MIB FDB entry encodes the learned MAC in its OID tail as six
+    decimal octets. Returns the normalized MAC, or None if the tail isn't one."""
+    octs = oid.rsplit(base, 1)[-1].strip(".").split(".")
+    if len(octs) < 6:
+        return None
+    try:
+        return norm_mac(":".join(f"{int(o):02x}" for o in octs[-6:]))
+    except ValueError:
+        return None
+
+
 class UnifiSnmpCollector(Collector):
     name = "unifi_snmp"
 
@@ -57,13 +81,7 @@ class UnifiSnmpCollector(Collector):
         except (subprocess.TimeoutExpired, OSError) as e:
             log.warning("snmpwalk %s %s failed: %s", sw["host"], oid, e)
             return []
-        pairs = []
-        for line in out.stdout.splitlines():
-            if " = " not in line:
-                continue
-            k, v = line.split(" = ", 1)
-            pairs.append((k.strip(), v.split(":", 1)[-1].strip().strip('"')))
-        return pairs
+        return parse_walk(out.stdout)
 
     def _walk_switch(self, sw: dict) -> list[dict]:
         sw_id = sw.get("name", sw["host"])
@@ -78,14 +96,7 @@ class UnifiSnmpCollector(Collector):
 
         # FDB: bridge port -> MACs learned. OID tail encodes the MAC (6 decimal octets)
         for oid, port in self._snmpwalk(sw, DOT1D_FDB):
-            tail = oid.rsplit(DOT1D_FDB, 1)[-1].strip(".")
-            octs = tail.split(".")
-            if len(octs) < 6:
-                continue
-            try:
-                mac = norm_mac(":".join(f"{int(o):02x}" for o in octs[-6:]))
-            except ValueError:
-                continue
+            mac = mac_from_fdb_oid(oid, DOT1D_FDB)
             if not mac:
                 continue
             portname = ifnames.get(port, f"port{port}")
@@ -105,3 +116,26 @@ class UnifiSnmpCollector(Collector):
                 items.append({"kind": "link", "src": sw_id, "dst": neigh,
                               "linkkind": "uplink"})
         return items
+
+
+if __name__ == "__main__":   # ponytail: the OID decode + walk parser, offline
+    WALK = """.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: Port 1
+.1.3.6.1.2.1.31.1.1.1.1.7 = STRING: "Port 7"
+not an assignment line
+.1.3.6.1.2.1.31.1.1.1.1.9 = INTEGER: 42"""
+    pairs = parse_walk(WALK)
+    assert len(pairs) == 3, pairs
+    assert pairs[0] == (".1.3.6.1.2.1.31.1.1.1.1.1", "Port 1")
+    assert pairs[1][1] == "Port 7", pairs[1]          # quotes stripped
+    assert pairs[2][1] == "42"                        # type prefix dropped
+    assert parse_walk("") == []
+
+    # 220.166.50.17.34.51 -> dc:a6:32:11:22:33
+    oid = DOT1D_FDB + ".220.166.50.17.34.51"
+    assert mac_from_fdb_oid(oid, DOT1D_FDB) == "dc:a6:32:11:22:33", mac_from_fdb_oid(oid, DOT1D_FDB)
+    # real FDB oids carry the vlan/bridge id first; the MAC is the LAST six octets
+    assert mac_from_fdb_oid(DOT1D_FDB + ".1.220.166.50.17.34.51", DOT1D_FDB) == "dc:a6:32:11:22:33"
+    assert mac_from_fdb_oid(DOT1D_FDB + ".1.2.3", DOT1D_FDB) is None          # too short
+    assert mac_from_fdb_oid(DOT1D_FDB + ".1.2.3.4.5.zz", DOT1D_FDB) is None   # not decimal
+    assert mac_from_fdb_oid("", DOT1D_FDB) is None
+    print("collectors/unifi_snmp parser self-check ok")

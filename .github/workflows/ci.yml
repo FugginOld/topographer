@@ -36,6 +36,12 @@ jobs:
         run: python -m collectors.unifi
       - name: Node identity + link resolution
         run: python -m core.identity
+      - name: Collector parsers (arp-scan/nmap, SNMP, docker, tailscale)
+        run: |
+          python -m collectors.arpscan
+          python -m collectors.unifi_snmp
+          python -m collectors.docker
+          python -m collectors.tailscale
       # module self-checks — each module's __main__ asserts its own contract, offline.
       # Keep this list identical to CONTRIBUTING.md → Tests.
       - name: Path-injection barrier (shared by both stores)

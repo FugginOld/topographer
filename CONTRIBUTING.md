@@ -40,6 +40,10 @@ python tests/test_cards.py                       # card contract + network-cards
 python tests/test_routes.py                      # boots topo_server on a free port, hits its routes
 python -m collectors.unifi                       # unifi transforms + the single GET/POST request path
 python -m core.identity                          # node id rule + link endpoint resolution
+python -m collectors.arpscan                     # arp-scan + nmap output parsers
+python -m collectors.unifi_snmp                  # snmpwalk parser + FDB OID -> MAC decode
+python -m collectors.docker                      # docker ps line parser
+python -m collectors.tailscale                   # peer shaping + overlay mesh
 python renderers/html/_guard.py                  # shared path-injection barrier
 python renderers/html/pushcache.py               # push-freshness cache (live/stale/miss)
 python renderers/html/store.py                   # store slug policy + save/load
