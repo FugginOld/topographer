@@ -29,7 +29,10 @@
   <Category>Network:Management Tools:Utilities Productivity:</Category>
   <WebUI>http://[IP]:8770/</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/FugginOld/topographer/main/docs/branding/topographer-3d-512.png</Icon>
+  <!-- Pinned to the commit that added the icon, not to main: CA caches icons, and a
+       content-addressed URL can never change or 404 under it. Re-pin only if the
+       artwork itself is replaced. -->
+  <Icon>https://raw.githubusercontent.com/FugginOld/topographer/b439bc1d0163368f1e0b70aca983136f9bfb51d2/docs/branding/topographer-3d-512.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <DonateText/>
