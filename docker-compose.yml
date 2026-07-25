@@ -1,0 +1,16 @@
+# Dashboard server. host networking is deliberate: the ping/arp/nmap collectors
+# need to see the real LAN, and pushes from agents keep their source IP (the
+# dashboard labels each card by it).
+services:
+  topographer:
+    build: .
+    image: ghcr.io/fugginold/topographer:latest
+    container_name: topographer
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./out:/app/out                              # saved topologies + widgets + icon cache
+      - ./config.yaml:/app/config.yaml:ro           # optional: network scan / collectors
+      - ~/.ssh:/root/.ssh:ro                        # optional: agentless remote host scan
+    # environment:
+    #   TOPO_TOKEN: your-shared-secret              # require a token from reporting agents

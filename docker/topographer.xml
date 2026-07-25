@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>topographer</Name>
+  <Repository>ghcr.io/fugginold/topographer:latest</Repository>
+  <Registry>https://github.com/FugginOld/topographer/pkgs/container/topographer</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest build from main</TagDescription>
+  </Branch>
+  <Network>host</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/FugginOld/topographer/issues</Support>
+  <Project>https://github.com/FugginOld/topographer</Project>
+  <Overview>
+    Homelab network and hardware topology dashboard. Scanners and collectors map your
+    machines and your LAN, a pipeline normalizes and enriches the result (vendor lookup,
+    VLAN by subnet, device kind), and the dashboard draws it live in the browser.
+    Reporting agents on other hosts push their own map plus telemetry to this server.
+    Also serves per-host service widgets and live Glances metrics.
+
+    Point agents at it with:  TOPO_SERVER=http://[UNRAID-IP]:8770
+
+    Host networking is the default on purpose: the ping/arp/nmap collectors need to see
+    the real LAN, and pushes from agents keep their true source IP (each card is labelled
+    by it). Bridge mode works for the dashboard itself but discovery will be blind.
+  </Overview>
+  <Category>Network:Management Tools:Utilities Productivity:</Category>
+  <WebUI>http://[IP]:8770/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/FugginOld/topographer/main/docs/branding/topographer-3d-512.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <DonateText/>
+  <DonateLink/>
+  <Config Name="Data" Target="/app/out" Default="/mnt/user/appdata/topographer" Mode="rw"
+          Description="Saved topologies, widget instances and the service-icon cache."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/topographer</Config>
+  <Config Name="WebUI Port" Target="8770" Default="8770" Mode="tcp"
+          Description="Dashboard + agent ingest API. Host networking ignores this — change the container's --port instead."
+          Type="Port" Display="advanced" Required="false" Mask="false">8770</Config>
+  <Config Name="config.yaml" Target="/app/config.yaml" Default="" Mode="ro"
+          Description="Optional. Path to a config.yaml FILE (not a folder) enabling the network scan, UniFi/OPNsense collectors, Glances and remote SSH scan. See config.example.yaml. Leave empty if unused."
+          Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="SSH keys" Target="/root/.ssh" Default="" Mode="ro"
+          Description="Optional. A folder holding an SSH key that can reach your Linux hosts — enables the agentless remote scan. Leave empty if unused."
+          Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="TOPO_TOKEN" Target="TOPO_TOKEN" Default="" Mode=""
+          Description="Optional shared secret. When set, reporting agents must send it to /api/ingest."
+          Type="Variable" Display="advanced" Required="false" Mask="true"/>
+</Container>

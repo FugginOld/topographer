@@ -1,0 +1,11 @@
+.git
+.github
+out
+vendor
+config.yaml
+__pycache__
+**/__pycache__
+*.pyc
+.venv
+venv
+docs/branding
