@@ -90,8 +90,19 @@ def pihole(cfg: dict) -> dict:
     return _pihole_v6(base, token) or _pihole_v5(base, token)
 
 
+def _guarded(cfg: dict) -> bool:
+    """A widget url is user-supplied, but the collector-backed Types below reach the
+    network through `collectors/transport.py`, which is deliberately NOT SSRF-guarded
+    (admin config.yaml urls). With config.yaml credentials layered under a widget's
+    url, an unguarded public target would be handed the real API token. Check here
+    so every widget fetch still passes the private-only guard."""
+    return net.allowed(str(cfg.get("url") or ""))
+
+
 def proxmox(cfg: dict) -> dict:
     """Cluster resource summary via the PVE collector's authenticated transport."""
+    if not _guarded(cfg):
+        return {}
     try:
         from collectors.proxmox import ProxmoxCollector
         res = ProxmoxCollector(cfg)._get("/cluster/resources") or []   # reuse token+TLS transport
@@ -115,6 +126,8 @@ def proxmox(cfg: dict) -> dict:
 
 def unifi(cfg: dict) -> dict:
     """WAN + client + gateway summary via the UniFi collector's dashboard()."""
+    if not _guarded(cfg):
+        return {}
     try:
         from collectors.unifi import UnifiCollector
         d = UnifiCollector(cfg).dashboard() or {}
@@ -195,4 +208,18 @@ if __name__ == "__main__":   # ponytail: pure response->stats mapping, offline
                       "ads_percentage_today": 20.0, "domains_being_blocked": 9,
                       "status": "enabled"})["queries"] == 5
     assert _pihole_base("http://10.0.10.5/admin") == "http://10.0.10.5"
+
+    # The collector-backed Types delegate to collectors/transport.py, which is NOT
+    # SSRF-guarded (its docstring says so) — and a widget url is user-supplied while
+    # the config.yaml token is layered underneath it. Both must consult the guard
+    # before any request leaves, or a public url harvests the real API token.
+    seen = []
+    _orig = net.allowed
+    net.allowed = lambda u: (seen.append(u), False)[1]
+    try:
+        assert proxmox({"url": "https://public.example", "token": "secret"}) == {}
+        assert unifi({"url": "https://public.example", "api_key": "secret"}) == {}
+    finally:
+        net.allowed = _orig
+    assert seen == ["https://public.example"] * 2, f"guard not consulted: {seen}"
     print("widgets/fetchers pihole self-check ok")

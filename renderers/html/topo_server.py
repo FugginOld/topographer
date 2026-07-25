@@ -424,6 +424,7 @@ def generate_network(subnet: str | None = None) -> dict:
 sys.path.insert(0, ROOT)    # repo root — where core/ and the scanners live
 from core import local_telemetry as _tele   # noqa: E402  shared local-metrics sampler
 from core import glances                     # noqa: E402  Glances reader (also used by the agent)
+from widgets import policy as wpolicy       # noqa: E402  widget config/secret policy
 from widgets import registry as wreg         # noqa: E402  widget Type catalog + fetchers
 
 _tele_cache = {"t": 0.0, "data": dict(_tele.ZERO)}   # this server's OWN metrics (brief cache), not a push
@@ -541,7 +542,15 @@ def snapshot_restore(snap) -> dict:
         if not isinstance(ws, list) or not raw.strip() or raw != canon:
             skipped += 1                               # widget keys are always slugs already
             continue
-        widgets += widget_store.replace(canon, ws)
+        # every restored widget passes the same policy as one added through the UI:
+        # unknown Types are skipped rather than stored with a config nothing masks
+        keep = []
+        for w in ws:
+            if not isinstance(w, dict) or not wreg.get(w.get("type", "")):
+                skipped += 1
+                continue
+            keep.append({**w, "config": wpolicy.clean(w["type"], w.get("config"))})
+        widgets += widget_store.replace(canon, keep)
         hosts += 1
     return {"topologies": topos, "hosts": hosts, "widgets": widgets, "skipped": skipped}
 
@@ -655,25 +664,14 @@ _widget_cache: dict[str, dict] = {}   # "host|id" -> {"t": monotonic, "data": st
 WIDGET_FRESH = 20.0                   # seconds a fetched sample is reused
 
 
-def _widget_public(w: dict) -> dict:
-    """A stored widget with secret config fields blanked for the browser (a
-    parallel 'secret_set' flags which ones actually have a value stored)."""
-    secrets = set(wreg.secret_fields(w.get("type", "")))
-    cfg = w.get("config", {})
-    return {"id": w["id"], "type": w["type"], "position": w.get("position", 0),
-            "interval": w.get("interval"),
-            "config": {k: ("" if k in secrets else v) for k, v in cfg.items()},
-            "secret_set": {k: bool(cfg.get(k)) for k in secrets}}
-
+# The secret protocol (mask out / whitelist in / inherit) lives in widgets/policy.py
+# so every path shares it. What stays here is the one thing the server owns: which
+# config.yaml block a Type inherits from.
 
 def _effective_config(w: dict) -> dict:
-    """Config the fetcher actually runs with: the widget's form values layered
-    over the matching config.yaml collector block (Type.config_key), so a
-    proxmox/unifi widget inherits already-configured credentials when left blank."""
-    t = wreg.get(w.get("type", ""))
-    base = _cfg_block(t["config_key"]) if t and t.get("config_key") else {}
-    form = {k: v for k, v in (w.get("config") or {}).items() if v not in (None, "")}
-    return {**base, **form}                              # form overrides config.yaml; blanks inherit
+    """Config the fetcher runs with, with config.yaml inheritance resolved."""
+    key = wpolicy.inherits(w.get("type", ""))
+    return wpolicy.effective(w, _cfg_block(key) if key else {})
 
 
 def widgets_list(host: str) -> list[dict]:
@@ -688,22 +686,7 @@ def widgets_list(host: str) -> list[dict]:
         if not (c and time.monotonic() - c["t"] < ttl):
             c = {"t": time.monotonic(), "data": wreg.fetch(w.get("type", ""), _effective_config(w))}
             _widget_cache[key] = c
-        out.append({**_widget_public(w), "data": c["data"]})
-    return out
-
-
-def _clean_config(wtype: str, config: dict, prev: dict | None = None) -> dict:
-    """Whitelist to the Type's known fields; a blank/absent secret preserves the
-    prior stored value (so the browser never has to echo a key back to keep it)."""
-    secrets, prev = set(wreg.secret_fields(wtype)), (prev or {})
-    out = {}
-    for k in wreg.field_names(wtype):
-        v = (config or {}).get(k)
-        if k in secrets and not v:
-            if prev.get(k):
-                out[k] = prev[k]
-        elif v is not None:
-            out[k] = v
+        out.append({**wpolicy.public(w), "data": c["data"]})
     return out
 
 
@@ -890,17 +873,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 host, wtype = store.stable_slug(b.get("host", "")), b.get("type", "")
                 if not host or not wreg.get(wtype):
                     return self._send(400, {"error": "missing host or unknown widget type"})
-                cfg = _clean_config(wtype, b.get("config", {}))
-                return self._send(200, _widget_public(widget_store.add(host, wtype, cfg, b.get("interval"))))
+                cfg = wpolicy.clean(wtype, b.get("config", {}))
+                return self._send(200, wpolicy.public(widget_store.add(host, wtype, cfg, b.get("interval"))))
             if self.path == "/api/widget-update":
                 b = self._body()
                 host, wid = store.stable_slug(b.get("host", "")), b.get("id", "")
                 cur = next((w for w in widget_store.list_for(host) if w["id"] == wid), None)
                 if not cur:
                     return self._send(404, {"error": "no such widget"})
-                cfg = _clean_config(cur["type"], b.get("config", {}), cur.get("config"))
+                cfg = wpolicy.clean(cur["type"], b.get("config", {}), cur.get("config"))
                 _widget_cache.pop(f"{host}|{wid}", None)          # re-fetch with the new config
-                return self._send(200, _widget_public(widget_store.update(host, wid, cfg, b.get("interval"))))
+                return self._send(200, wpolicy.public(widget_store.update(host, wid, cfg, b.get("interval"))))
             if self.path == "/api/widget-test":
                 b = self._body()
                 host, wid = store.stable_slug(b.get("host", "")), b.get("id", "")

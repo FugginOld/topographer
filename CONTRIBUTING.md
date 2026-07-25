@@ -39,6 +39,7 @@ python tests/test_pipeline.py                    # collectors -> normalize -> en
 python tests/test_cards.py                       # card contract + network-cards adapter
 python tests/test_routes.py                      # boots topo_server on a free port, hits its routes
 python -m collectors.unifi                       # unifi transforms + the single GET/POST request path
+python -m core.identity                          # node id rule + link endpoint resolution
 python renderers/html/_guard.py                  # shared path-injection barrier
 python renderers/html/pushcache.py               # push-freshness cache (live/stale/miss)
 python renderers/html/store.py                   # store slug policy + save/load
@@ -48,7 +49,8 @@ python renderers/html/agent_bundle.py            # agent tar.gz/zip builder
 python collectors/transport.py                   # shared collector HTTP (ssl ctx + get_json)
 python -m widgets.net                            # widget SSRF guard
 python -m widgets.engine                         # widget engine (auth/mapping)
-python -m widgets.fetchers                       # widget stat parsers (prowlarr/sabnzbd/tautulli)
+python -m widgets.fetchers                       # widget stat parsers + collector-backed SSRF guard
+python -m widgets.policy                         # widget config/secret policy (mask/whitelist/inherit)
 python -m widgets.registry                       # catalog integrity + full_catalog merge
 python scanners/make_linux_topo.py --selftest
 bash tests/test_uninstall_unraid.sh              # uninstaller only removes its own boot 'go' lines

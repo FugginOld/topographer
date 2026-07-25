@@ -151,6 +151,17 @@ def _snapshot_round_trip(port: int):
         tid = row["id"]
         assert tid == sid, f"the snapshot's own id should be kept, got {tid}"
         assert json.loads(_get(port, f"/api/widgets?host={tid}")[1])[0]["type"] == "pihole"
+
+        # A restored widget must pass the same field whitelist as one added through
+        # the UI: an unknown type has no declared secret fields, so anything the
+        # file carries would be echoed to the browser verbatim.
+        _post(port, "/api/snapshot-restore", {
+            "kind": "topographer-snapshot", "version": 1, "topologies": [],
+            "widgets": {sid: [{"id": "w2", "type": "not-a-real-type",
+                               "config": {"token": "hunter2", "url": "http://x"}}]}})
+        back = json.loads(_get(port, f"/api/widgets?host={sid}")[1])
+        leaked = [w for w in back if "hunter2" in json.dumps(w.get("config", {}))]
+        assert not leaked, f"restore leaked a secret to the browser: {leaked}"
     finally:
         if tid:                                   # leave the real store exactly as we found it
             _post(port, "/api/delete", {"id": tid})

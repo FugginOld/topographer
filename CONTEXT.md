@@ -19,6 +19,21 @@ them (UniFi, Proxmox, ping, arp, SNMP, SSH…) behind one flat interface — the
 codebase's deepest seam. A down/absent source returns `[]`, never raises, so
 enabling several is safe.
 
+## Node identity
+
+The rule that turns a raw dict into a **Topology** node id — MAC if known, else IP,
+else name — and the alias table that resolves link endpoints to it
+(`core/identity.py`: `node_id`, `build_index`, `resolve_links`).
+
+It exists because the two sides disagree. Collectors address links by whatever
+identifier *their* source holds: Proxmox and Docker nest guests under the host's
+**name**, SNMP names switches, ARP knows only MACs. And `normalize` *folds*
+duplicate nodes together, retiring ids other collectors already referenced. Both
+mismatches used to delete edges silently. Every node claims its id, MAC, IP and
+name; a fold records `old id -> surviving id`; endpoints resolve through the
+index. A name two nodes answer to resolves to **neither** — ambiguity is refused,
+never guessed — and a real node id always outranks an alias.
+
 ## Card
 
 The **dashboard view-model** — the `{id, parent, label, sub, cls, kind, meta,

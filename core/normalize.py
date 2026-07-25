@@ -11,6 +11,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Iterable
 
+from .identity import build_index, node_id, resolve_links
 from .schema import Node, Link, Zone, Topology, norm_mac
 
 
@@ -31,12 +32,13 @@ def _zone_for_ip(ip: str | None, zones: list[Zone]) -> int | None:
 
 
 def _node_key(raw: dict) -> str:
+    """Dedup key: the id rule, namespaced so a name can't collide with an IP."""
     mac = norm_mac(raw.get("mac"))
     if mac:
         return f"mac:{mac}"
     if raw.get("ip"):
         return f"ip:{raw['ip']}"
-    return f"name:{raw.get('name', 'unknown')}"
+    return f"name:{node_id(name=raw.get('name'))}"
 
 
 def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
@@ -45,6 +47,7 @@ def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
 
     node_by_key: dict[str, Node] = {}
     links: list[Link] = []
+    folded: dict[str, str] = {}          # id that went away -> id that absorbed it
 
     for raw in raw_items:
         kind = raw.get("kind")
@@ -120,6 +123,7 @@ def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
                 if s not in target.sources:
                     target.sources.append(s)
             target.online = target.online or n.online
+            folded[n.id] = target.id
             del node_by_key[key]
 
     # reconcile by hostname: fold name-only nodes (tailscale peers, etc.) into a
@@ -139,6 +143,7 @@ def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
                 if s not in target.sources:
                     target.sources.append(s)
             target.online = target.online or n.online
+            folded[n.id] = target.id
             del node_by_key[key]
 
     # assign VLAN membership
@@ -147,7 +152,8 @@ def normalize(raw_items: Iterable[dict], zones_raw: Iterable[dict]) -> Topology:
             n.vlan = _zone_for_ip(n.ip, zones)
 
     topo.nodes = list(node_by_key.values())
-    # keep only links whose endpoints resolved to known nodes
-    ids = {n.id for n in topo.nodes}
-    topo.links = [l for l in links if l.src in ids and l.dst in ids]
+    # Collectors address endpoints by whatever identifier they hold (a hostname,
+    # a switch name), and the folds above retired some ids outright. Resolve both
+    # through the identity index rather than dropping what doesn't match.
+    topo.links = resolve_links(links, build_index(topo.nodes, folded))
     return topo
