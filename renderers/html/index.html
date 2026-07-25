@@ -33,11 +33,30 @@
   #sidebar .head .brand .core{fill:#4CC6C6}                    /* teal core stays brand-constant */
   #sidebar .head h2{font-size:12px;letter-spacing:.24em;color:var(--hud);text-shadow:0 0 10px rgba(var(--glow),.4)}
   #sidebar .head .sub{font-size:8.5px;color:var(--hud-dim);letter-spacing:.12em;margin-top:5px}
-  #addbtn,#netbtn,#expbtn{margin:12px 14px;padding:9px 8px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
+  /* sidebar panels: the topology list and settings share the same slot */
+  #sbtabs{display:flex;margin:2px 14px 8px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  #sbtabs button{flex:1;padding:6px 4px;border:none;background:transparent;color:var(--hud-dim);
+    font-family:inherit;font-size:8px;letter-spacing:.16em;cursor:pointer;transition:.15s}
+  #sbtabs button:hover{color:var(--hud)}
+  #sbtabs button.active{background:rgba(var(--glow),.14);color:var(--hud)}
+  #settings{flex:1;overflow-y:auto;padding:2px 14px 10px;display:none}
+  #sidebar.settings #list{display:none}
+  #sidebar.settings #settings{display:block}
+  #settings h3{font-size:8.5px;letter-spacing:.2em;color:var(--hud-dim);font-weight:400;margin:16px 0 8px}
+  #settings h3:first-child{margin-top:6px}
+  #settings button{width:100%;margin:0 0 7px;padding:9px 8px;border:1px dashed var(--hud-dim);border-radius:4px;
+    background:transparent;color:var(--ink);font-family:inherit;font-size:9px;letter-spacing:.1em;
+    cursor:pointer;transition:.15s;text-align:left}
+  #settings button:hover{border-color:var(--hud);background:rgba(var(--glow),.08)}
+  #settings button:disabled{opacity:.5;cursor:wait}
+  #settings .note{font-size:8px;color:var(--hud-dim);line-height:1.75;letter-spacing:.05em;margin:0 0 4px}
+  #settings .note.warn{color:var(--warn)}
+  #settings .note code{color:var(--hud)}
+  #addbtn,#netbtn{margin:12px 14px;padding:9px 8px;border:1px dashed var(--hud-dim);border-radius:4px;background:transparent;
     color:var(--hud);font-family:inherit;font-size:10px;letter-spacing:.1em;text-transform:uppercase;text-align:center;
     white-space:nowrap;cursor:pointer;transition:.15s;display:block;width:calc(100% - 28px)}
-  #netbtn,#expbtn{margin-top:0}
-  #addbtn:hover,#netbtn:hover,#expbtn:hover{border-color:var(--hud);background:rgba(var(--glow),.08);box-shadow:0 0 14px rgba(var(--glow),.15)}
+  #netbtn{margin-top:0}
+  #addbtn:hover,#netbtn:hover{border-color:var(--hud);background:rgba(var(--glow),.08);box-shadow:0 0 14px rgba(var(--glow),.15)}
   #addbtn:disabled,#netbtn:disabled{opacity:.5;cursor:wait}
   #list{flex:1;overflow-y:auto;padding:0 10px}
   #list .empty{padding:20px 12px;font-size:9px;color:var(--hud-dim);letter-spacing:.08em;line-height:1.8;text-align:center}
@@ -74,8 +93,12 @@
   svg{width:100%;height:100%;overflow:visible;touch-action:none}
   text{font-family:"DejaVu Sans Mono",monospace;user-select:none}
   .card{cursor:move}
-  #legend{padding:12px 16px 6px;border-top:1px solid var(--line);font-size:9px;color:var(--hud-dim);letter-spacing:.08em;line-height:2}
+  /* floating card over the topology view's top-right; hidden on the dashboard */
+  #legend{position:absolute;top:70px;right:32px;z-index:7;background:var(--panel);border:1px solid var(--line);
+    border-radius:4px;padding:9px 13px;font-size:9px;color:var(--hud-dim);letter-spacing:.08em;line-height:1.95;
+    box-shadow:0 2px 14px rgba(0,0,0,.22);pointer-events:none}
   #legend i{display:inline-block;width:16px;height:2px;vertical-align:middle;margin-right:8px}
+  #main.dashview #legend{display:none}
   #err{position:absolute;inset:70px 32px 40px;display:none;align-items:center;justify-content:center;z-index:20;color:var(--warn);font-size:12px;text-align:center;padding:40px;line-height:1.9}
   #err code{color:var(--hud)}
   #zoom{position:absolute;right:30px;bottom:34px;z-index:8;display:flex;flex-direction:column;gap:6px}
@@ -263,25 +286,40 @@
   </div>
   <button id="addbtn">+ Generate Current Machine</button>
   <button id="netbtn">⊹ Scan Network</button>
-  <button id="expbtn" title="download a diagnostic bundle of every host">⭳ Export Diagnostics</button>
+  <div id="sbtabs">
+    <button id="tabList" class="active">TOPOLOGIES</button>
+    <button id="tabSettings">SETTINGS</button>
+  </div>
   <div id="list"></div>
-  <div id="legend">lane class
-    <div><i style="background:var(--gen5)"></i>Gen5</div>
-    <div><i style="background:var(--gen4)"></i>Gen4</div>
-    <div><i style="background:var(--gen3)"></i>Gen3 / chipset</div></div>
-  <div class="foot">
-    <label for="skin" style="display:block;margin-bottom:5px">skin</label>
+  <div id="settings">
+    <h3>appearance</h3>
+    <label for="skin" style="display:block;margin-bottom:5px;font-size:8px;color:var(--hud-dim);letter-spacing:.1em">skin</label>
     <select id="skin">
       <option value="">auto · follow OS</option>
       <option value="dark">dark</option>
       <option value="light">light</option>
     </select>
-    <div style="margin-top:8px">drag module · scroll zoom · drag bg to pan</div>
+
+    <h3>backup</h3>
+    <button id="snapdl" title="download every topology + widget as one restorable file">⭳ Export Snapshot</button>
+    <button id="snapup" title="restore topologies + widgets from a snapshot file">⭱ Import Snapshot</button>
+    <div class="note warn">Contains widget API keys in clear — a snapshot has to
+      restore working widgets. Keep it as private as <code>config.yaml</code>.</div>
+
+    <h3>diagnostics</h3>
+    <button id="expbtn" title="download a diagnostic bundle of every host">⭳ Export Diagnostics</button>
+    <div class="note">For bug reports: topology, telemetry and services. No credentials.</div>
+    <input id="snapfile" type="file" accept="application/json,.json" hidden>
   </div>
+  <div class="foot">drag module · scroll zoom · drag bg to pan</div>
 </aside>
 
 <main id="main">
   <div id="frame"></div><div class="corner tl"></div><div class="corner br"></div>
+  <div id="legend">lane class
+    <div><i style="background:var(--gen5)"></i>Gen5</div>
+    <div><i style="background:var(--gen4)"></i>Gen4</div>
+    <div><i style="background:var(--gen3)"></i>Gen3 / chipset</div></div>
   <header>
     <div><h1 id="title">—</h1><div class="tag" id="subtitle"></div></div>
   </header>
@@ -434,6 +472,40 @@ document.getElementById('netbtn').onclick=async e=>{
   finally{ btn.disabled=false; btn.textContent='⊹ Scan Network'; }
 };
 document.getElementById('expbtn').onclick=()=>{ location.href='api/export?format=html'; };
+
+// ---- sidebar panels: topology list <-> settings ----
+function sbPanel(settings){
+  document.getElementById('sidebar').classList.toggle('settings',settings);
+  document.getElementById('tabList').classList.toggle('active',!settings);
+  document.getElementById('tabSettings').classList.toggle('active',settings);
+}
+document.getElementById('tabList').onclick=()=>sbPanel(false);
+document.getElementById('tabSettings').onclick=()=>sbPanel(true);
+
+// ---- snapshot: whole-dashboard backup + restore ----
+document.getElementById('snapdl').onclick=()=>{ location.href='api/snapshot'; };
+document.getElementById('snapup').onclick=()=>document.getElementById('snapfile').click();
+document.getElementById('snapfile').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value='';        // reset so the same file can be picked twice
+  if(!f) return;
+  const btn=document.getElementById('snapup');
+  let snap;
+  try{ snap=JSON.parse(await f.text()); }
+  catch(err){ return showNotice('Not a snapshot',`<div>${esc(f.name)} isn't valid JSON.</div>`); }
+  if(!confirm(`Restore from "${f.name}"?\n\nTopologies and widgets with the same name are overwritten. Nothing already here is deleted.`)) return;
+  btn.disabled=true; btn.textContent='… RESTORING';
+  try{
+    const r=await fetch('api/snapshot-restore',{method:'POST',headers:{'Content-Type':'application/json'},
+                                                body:JSON.stringify(snap)});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+    await loadList();
+    showNotice('Snapshot restored',
+      `<div>${d.topologies} topolog${d.topologies===1?'y':'ies'}, `+
+      `${d.widgets} widget${d.widgets===1?'':'s'} across ${d.hosts} host${d.hosts===1?'':'s'}.</div>`);
+  }catch(err){ showErr('restore failed:<br><br><code>'+esc(err.message)+'</code>'); }
+  finally{ btn.disabled=false; btn.textContent='⭱ Import Snapshot'; }
+};
 function spaced(s){return (s||'').toUpperCase().split('').join(' ');}
 
 // ================= VIEW: topology <-> native gateway dashboard =================

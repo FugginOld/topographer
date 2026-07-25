@@ -48,6 +48,23 @@ def save(topo: dict, source: str | None = None) -> dict:
     return {"id": tid, "name": name}
 
 
+def save_as(tid: str, topo: dict) -> dict:
+    """Persist under an explicit id — snapshot restore, which must reproduce the
+    ids it captured (a generated id is timestamped, not slug(name), so re-deriving
+    it would fork a second copy of the same host). The id still goes through the
+    same guard as every other path, so a hostile one raises instead of escaping."""
+    # guarded_path() basename-reduces, so "../../x" would land inside the store as
+    # "x" rather than raise. Contained, but a real snapshot never holds an id like
+    # that — refuse it instead of quietly inventing an entry.
+    if tid != os.path.basename(tid):
+        raise ValueError("topology id must be a plain id, not a path")
+    p = path(tid)                                  # charset allowlist + containment
+    os.makedirs(STORE, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(topo, fh, indent=2)
+    return {"id": tid, "name": topo.get("name") or tid}
+
+
 def load(tid: str) -> dict:
     with open(path(tid), encoding="utf-8") as fh:
         return json.load(fh)

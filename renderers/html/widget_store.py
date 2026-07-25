@@ -39,6 +39,23 @@ def _write(host: str, widgets: list[dict]) -> None:
         json.dump({"widgets": widgets}, fh, indent=2)
 
 
+def hosts() -> list[str]:
+    """Every host with stored widgets — the snapshot walks these."""
+    if not os.path.isdir(STORE):
+        return []
+    return [f[:-5] for f in os.listdir(STORE) if f.endswith(".json")]
+
+
+def replace(host: str, widgets: list) -> int:      # list, not list[dict]: it comes from an upload
+    """Overwrite a host's whole widget list (snapshot restore). Anything that is
+    not a widget dict is dropped — the list comes from an uploaded file."""
+    if host != os.path.basename(host):   # see store.save_as — refuse, don't basename-reduce
+        raise ValueError("host must be a plain id, not a path")
+    keep = [w for w in widgets if isinstance(w, dict) and w.get("id") and w.get("type")]
+    _write(host, keep)
+    return len(keep)
+
+
 def list_for(host: str) -> list[dict]:
     """This host's widgets, ordered by position (raw config — secrets included)."""
     return sorted(_read(host), key=lambda w: w.get("position", 0))
@@ -109,6 +126,12 @@ if __name__ == "__main__":   # ponytail: CRUD round-trip; the path barrier is te
         assert next(w for w in list_for(h) if w["id"] == a["id"])["config"]["token"] == "s2"
         delete(h, a["id"])
         assert [w["id"] for w in list_for(h)] == [b["id"]]
+        # snapshot support: enumerate hosts, and restore a whole list wholesale
+        assert h in hosts()
+        assert replace(h, [{"id": "w1", "type": "pihole", "config": {"url": "http://z"}},
+                           "junk", {"no": "type"}]) == 1        # non-widgets dropped
+        assert [w["id"] for w in list_for(h)] == ["w1"]
+        assert replace(h, []) == 0 and list_for(h) == []
     finally:
         try:
             os.remove(_path(h))

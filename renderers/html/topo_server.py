@@ -480,6 +480,68 @@ def export_bundle(tid: str) -> dict:
     }
 
 
+# ── Snapshot: the backup/restore pair. Distinct from the diagnostic export above —
+# that one is for bug reports and carries no widget config, while a snapshot exists
+# to rebuild a dashboard and therefore DOES carry widget credentials in clear. The
+# UI says so on the button; treat the file like the config.yaml it mirrors.
+SNAPSHOT_KIND = "topographer-snapshot"
+
+
+def snapshot() -> dict:
+    """Everything a fresh server needs to look like this one: stored topologies +
+    every host's widget instances. Each topology carries the id it is stored under —
+    ids are not always slug(name) (a generated one is timestamped), so a restore
+    that re-derived them would fork a second copy of every locally-scanned host."""
+    topos = []
+    for tid in store.ids():
+        try:
+            topos.append({"id": tid, "topology": store.load(tid)})
+        except (ValueError, OSError):
+            continue                                   # unreadable file skipped, not fatal
+    return {"kind": SNAPSHOT_KIND, "version": 1,
+            "exported": time.strftime("%Y-%m-%dT%H:%M:%S"), "server": server_ip(),
+            "topologies": topos,
+            "widgets": {h: widget_store.list_for(h) for h in widget_store.hosts()}}
+
+
+def snapshot_restore(snap) -> dict:
+    """Merge a snapshot into this server: same id overwrites, anything already here
+    and absent from the file is left alone (restore never deletes). Restoring a
+    server's own snapshot is therefore a no-op.
+
+    Ids from the file are honoured but every one of them goes through the store's
+    path guard, so a crafted id raises and is skipped rather than escaping the
+    store. An entry whose id is unusable still restores under a slug of its name."""
+    if not isinstance(snap, dict) or snap.get("kind") != SNAPSHOT_KIND:
+        raise ValueError("not a topographer snapshot (wrong or missing 'kind')")
+    topos = skipped = 0
+    for entry in snap.get("topologies") or []:
+        if not isinstance(entry, dict):
+            continue
+        doc = entry.get("topology")
+        if not isinstance(doc, dict) or not doc.get("nodes"):
+            continue
+        try:
+            store.save_as(str(entry.get("id") or ""), doc)   # guarded; keeps the original id
+        except (ValueError, OSError):
+            if not doc.get("name"):
+                skipped += 1
+                continue
+            store.save(doc)                            # unusable id -> slug of the name
+        topos += 1
+    hosts = widgets = 0
+    for host, ws in (snap.get("widgets") or {}).items():
+        if not isinstance(ws, list) or not str(host).strip():
+            continue
+        try:
+            widgets += widget_store.replace(str(host), ws)   # guarded the same way
+        except (ValueError, OSError):
+            skipped += 1
+            continue
+        hosts += 1
+    return {"topologies": topos, "hosts": hosts, "widgets": widgets, "skipped": skipped}
+
+
 def export_all() -> dict:
     """Whole-dashboard diagnostic: one bundle per stored host."""
     return {"exported": time.strftime("%Y-%m-%dT%H:%M:%S"), "server": server_ip(),
@@ -724,6 +786,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if p == "/api/widgets":
             host = store.stable_slug(parse_qs(urlparse(self.path).query).get("host", [""])[0])
             return self._send(200, widgets_list(host))
+        if p == "/api/snapshot":
+            return self._send_download(f"topographer-snapshot-{time.strftime('%Y%m%d')}.json",
+                                       snapshot())
         if p == "/api/export":
             q = parse_qs(urlparse(self.path).query)
             want = q.get("id", [""])[0]
@@ -775,6 +840,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if self.path == "/api/delete":
                 store.delete(self._body().get("id", ""))   # bad/absent id is a no-op
                 return self._send(200, {"ok": True})
+            if self.path == "/api/snapshot-restore":
+                try:
+                    return self._send(200, snapshot_restore(self._body()))
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
             if self.path == "/api/ingest":
                 if INGEST_TOKEN and self.headers.get("X-Token") != INGEST_TOKEN:
                     return self._send(403, {"error": "bad or missing token"})
