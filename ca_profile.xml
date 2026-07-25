@@ -1,0 +1,20 @@
+<CommunityApplications>
+  <Profile>
+**Topographer** — a homelab network + hardware topology dashboard.
+
+Scanners and collectors map your machines and your LAN from live sources (UniFi,
+Proxmox, OPNsense, SNMP, Tailscale, Docker, ping/ARP), a pipeline normalizes and
+enriches the result — vendor lookup, VLAN by subnet, device kind — and the
+dashboard draws it live in the browser. Reporting agents on other hosts push their
+own hardware map plus CPU / network / disk telemetry back to one server, so the
+whole fleet is visible from a single page. Per-service widgets (Pi-hole, Proxmox,
+the *arr stack, and 150+ more) and live Glances metrics sit alongside the maps.
+
+Everything is stdlib Python with a single dependency (PyYAML). Your topology is
+treated as private data: it stays in appdata and is never sent anywhere.
+
+Maintained by FugginOld. Issues and feature requests are welcome on GitHub.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/FugginOld/topographer/main/icon.svg</Icon>
+  <WebPage>https://github.com/FugginOld/topographer</WebPage>
+</CommunityApplications>

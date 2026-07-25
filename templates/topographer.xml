@@ -28,15 +28,20 @@
   </Overview>
   <Category>Network:Management Tools:Utilities Productivity:</Category>
   <WebUI>http://[IP]:8770/</WebUI>
-  <TemplateURL/>
+  <!-- Must point at the raw URL of THIS exact file, on the live branch: CA re-reads
+       it to pick up template updates, so unlike the icon it is deliberately not pinned. -->
+  <TemplateURL>https://raw.githubusercontent.com/FugginOld/topographer/main/templates/topographer.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/FugginOld/topographer/main/README.md</ReadMe>
   <!-- Pinned to the commit that added the icon, not to main: CA caches icons, and a
        content-addressed URL can never change or 404 under it. Re-pin only if the
        artwork itself is replaced. -->
   <Icon>https://raw.githubusercontent.com/FugginOld/topographer/b439bc1d0163368f1e0b70aca983136f9bfb51d2/docs/branding/topographer-3d-512.png</Icon>
+  <ExtraSearchTerms>topology network map dashboard homelab telemetry glances widgets proxmox unifi</ExtraSearchTerms>
+  <Requires>Host networking is strongly recommended — the ping/arp/nmap collectors need to see the real LAN, and agent pushes keep their true source IP.</Requires>
+  <License>MIT</License>
+  <MinVer>6.9</MinVer>
   <ExtraParams/>
   <PostArgs/>
-  <DonateText/>
-  <DonateLink/>
   <Config Name="Data" Target="/app/out" Default="/mnt/user/appdata/topographer" Mode="rw"
           Description="Saved topologies, widget instances and the service-icon cache."
           Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/topographer</Config>

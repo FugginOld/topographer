@@ -287,7 +287,7 @@ baked into old systemd units / launchers changed.
 |---|---|
 | `install.sh` / `uninstall.sh` | set up / remove the dashboard server as a Linux service |
 | `systemd/topo-server.service` | the dashboard service unit (install.sh writes it for you) |
-| `Dockerfile` / `docker-compose.yml` / `docker/topographer.xml` | run the dashboard as a container (incl. Unraid CA) |
+| `Dockerfile` / `docker-compose.yml` / `templates/topographer.xml` | run the dashboard as a container (incl. Unraid CA) |
 | `renderers/html/topo_server.py` | dashboard server + ingest/telemetry API |
 | `renderers/html/index.html` | the dashboard UI |
 | `scanners/make_pc_topo.py` | Windows hardware scan |

@@ -137,7 +137,7 @@ core/local_telemetry.py       shared live CPU/net/disk/temp sampler
 agent/topo_agent.py        push topology + telemetry to the server
 install.sh · uninstall.sh  set up / remove the dashboard as a Linux service
 agent/report.sh · agent/report.ps1   run the agent (self-updating)
-Dockerfile · docker-compose.yml · docker/topographer.xml
+Dockerfile · docker-compose.yml · templates/topographer.xml
                          run the dashboard as a container (incl. Unraid CA)
 bootstrap.sh             agent one-liner install (Linux/Unraid): systemd / go-script /
                          TOPO_ONCE snapshot — adapts to the host, git-free
@@ -155,4 +155,4 @@ Every check CI runs is listed in [CONTRIBUTING.md](CONTRIBUTING.md) — all offl
 ## License
 
 [MIT](LICENSE) © 2026 FugginOld. Covers everything in this repository, including the
-Unraid Community Applications template in `docker/`.
+Unraid Community Applications template in `templates/`.
