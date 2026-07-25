@@ -726,8 +726,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._send(200, widgets_list(host))
         if p == "/api/export":
             q = parse_qs(urlparse(self.path).query)
-            tid = q.get("id", [""])[0]
-            obj = export_bundle(tid) if tid else export_all()   # store.load is path-guarded
+            want = q.get("id", [""])[0]
+            # Resolve the requested id against what is actually stored and use the
+            # store's own value from here on. Everything downstream — the bundle and
+            # the Content-Disposition filename — then derives from the store, never
+            # from the query string. (_send_download percent-encodes too; belt and braces.)
+            tid = next((i for i in store.ids() if i == want), "")
+            if want and not tid:
+                return self._send(404, {"error": "unknown id"})
+            obj = export_bundle(tid) if tid else export_all()
             stem = f"topo-{tid}-{time.strftime('%Y%m%d')}" if tid else f"dashboard-{time.strftime('%Y%m%d')}"
             if q.get("format", [""])[0] == "html":
                 return self._send_download(f"{stem}.html", export_html(obj), "text/html; charset=utf-8")

@@ -31,6 +31,15 @@ def _get(port: int, path: str):
         return e.code, e.read()
 
 
+def _download_headers(port: int, path: str):
+    """(status, headers) for a download route — the response headers are the point."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=15) as r:
+            return r.status, dict(r.headers)
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers)
+
+
 def _serve():
     """Start the server, wait for it to answer, yield the port, always kill it."""
     port = _free_port()
@@ -72,6 +81,16 @@ def test_routes():
 
         assert _get(port, "/no/such/thing")[0] == 404
         assert _get(port, "/t/../secret.json")[0] in (400, 404)   # store guard holds over HTTP
+
+        # export: an id that isn't in the store is refused outright, so nothing
+        # request-derived can reach the Content-Disposition filename
+        for bad in ("../../etc/passwd", "x%0d%0aSet-Cookie:+a%3db", 'a"b', "nope"):
+            assert _get(port, f"/api/export?id={bad}")[0] == 404, bad
+        st, hdrs = _download_headers(port, "/api/export")         # whole-dashboard export
+        assert st == 200, st
+        cd = hdrs.get("Content-Disposition", "")
+        assert cd.startswith('attachment; filename="dashboard-') and cd.endswith('.json"'), cd
+        assert "\r" not in cd and "\n" not in cd
     finally:
         proc.terminate()
         proc.wait(timeout=10)
